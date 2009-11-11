@@ -153,8 +153,13 @@ static char *rle_compress16(uint16_t * src, char *dst, int rem)
 		while (rem && *src == pix0)
 			rem--, rl++, src++;
 		*dst++ = rl;
+#ifdef _BIG_ENDIAN
+		*dst++ = start[0];
+		*dst++ = start[1];
+#else
 		*dst++ = start[1];
 		*dst++ = start[0];
+#endif
 	}
 
 	return dst;
@@ -274,8 +279,13 @@ image_blit(struct dlfb_data *dev_info, int x, int y, int width, int height,
 					// PUT COMPRESSION HERE
 					for (j = firstdiff * 2;
 					     j < thistime * 2; j += 2) {
+#ifdef _BIG_ENDIAN
+						*bufptr++ = data[j];
+						*bufptr++ = data[j+1];
+#else
 						*bufptr++ = data[j + 1];
 						*bufptr++ = data[j];
+#endif
 					}
 				}
 			}
