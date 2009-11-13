@@ -877,10 +877,10 @@ dlfb_probe(struct usb_interface *interface, const struct usb_device_id *id)
 
 	dlfb_set_video_mode(dev, 0, 0, 0, 0);
 
-	dev->backing_buffer = kzalloc(dev->screen_size, GFP_KERNEL);
+	dev->backing_buffer = vmalloc(dev->screen_size);
 
 	if (!dev->backing_buffer) {
-		printk("non posso allocare il backing buffer\n");
+		printk("unable to allocate backing buffer\n");
 		goto out;
 	}
 
