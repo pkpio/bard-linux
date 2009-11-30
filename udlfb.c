@@ -947,6 +947,21 @@ static int dlfb_blank(int blank_mode, struct fb_info *info)
 	return 0;
 }
 
+static int dlfb_check_var(struct fb_var_screeninfo *var, struct fb_info *info)
+{
+	/* TODO: support dynamically increasing framebuffer size */
+	if ((var->xres * var->yres * 2) >
+	    info->fix.smem_len)
+		return -EINVAL;
+
+	return 0;
+}
+
+static int dlfb_set_par(struct fb_info *info) {
+	
+	return dlfb_set_video_mode(info->par, info->var);
+}
+
 static struct fb_ops dlfb_ops = {
 	.fb_setcolreg = dlfb_setcolreg,
 	.fb_fillrect = dlfb_fillrect,
@@ -956,6 +971,8 @@ static struct fb_ops dlfb_ops = {
 	.fb_ioctl = dlfb_ioctl,
 	.fb_release = dlfb_release,
 	.fb_blank = dlfb_blank,
+	.fb_check_var = dlfb_check_var,
+	.fb_set_par = dlfb_set_par,
 };
 
 static int dlfb_probe(struct usb_interface *interface,
