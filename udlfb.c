@@ -406,7 +406,7 @@ image_blit(struct dlfb_data *dev_info, int x, int y, int width, int height,
 		if (dev_info->bufend - bufptr < BUF_HIGH_WATER_MARK) {
 			int len =  bufptr - dev_info->buf;
 			ret = dlfb_bulk_msg(dev_info, len);
-			atomic_add(len>>10, &dev_info->kbytes_sent);
+			atomic_add(len, &dev_info->bytes_sent);
 			bufptr = dev_info->buf;
 		}
 
@@ -421,7 +421,7 @@ image_blit(struct dlfb_data *dev_info, int x, int y, int width, int height,
 			if (dev_info->bufend - bufptr < BUF_HIGH_WATER_MARK) {
 				int len =  bufptr - dev_info->buf;
 				ret = dlfb_bulk_msg(dev_info, len);
-				atomic_add(len>>10, &dev_info->kbytes_sent);
+				atomic_add(len, &dev_info->bytes_sent);
 				bufptr = dev_info->buf;
 			}
 
@@ -441,7 +441,7 @@ image_blit(struct dlfb_data *dev_info, int x, int y, int width, int height,
 				}
 
 				firstdiff = j/2;
-				atomic_add(j>>10, &dev_info->kbytes_identical);
+				atomic_add(j, &dev_info->bytes_identical);
 			}
 
 
@@ -510,11 +510,11 @@ image_blit(struct dlfb_data *dev_info, int x, int y, int width, int height,
 	if (bufptr > dev_info->buf) {
 		int len =  bufptr - dev_info->buf;
        		ret = dlfb_bulk_msg(dev_info, len);
-		atomic_add(len>>10, &dev_info->kbytes_sent);
+		atomic_add(len, &dev_info->bytes_sent);
 		bufptr = dev_info->buf;
 	}
 
-	atomic_add((width*height*2) >> 10, &dev_info->kbytes_rendered);
+	atomic_add(width*height*2, &dev_info->bytes_rendered);
 	end_cycles = get_cycles();
 	atomic_add(((unsigned int)end_cycles - (unsigned int)start_cycles)
 		   >> 10, /* Kcycles */
@@ -980,28 +980,28 @@ static struct fb_ops dlfb_ops = {
 };
 
 
-static ssize_t metrics_kbytes_rendered_show(struct device *fbdev, 
+static ssize_t metrics_bytes_rendered_show(struct device *fbdev, 
 				   struct device_attribute *a, char *buf) {
 	struct fb_info *fb_info = dev_get_drvdata(fbdev);
 	struct dlfb_data *dev = fb_info->par;
 	return snprintf(buf, PAGE_SIZE, "%u\n",
-			atomic_read(&dev->kbytes_rendered));
+			atomic_read(&dev->bytes_rendered));
 }
 
-static ssize_t metrics_kbytes_identical_show(struct device *fbdev, 
+static ssize_t metrics_bytes_identical_show(struct device *fbdev, 
 				   struct device_attribute *a, char *buf) {
 	struct fb_info *fb_info = dev_get_drvdata(fbdev);
 	struct dlfb_data *dev = fb_info->par;
 	return snprintf(buf, PAGE_SIZE, "%u\n",
-			atomic_read(&dev->kbytes_identical));
+			atomic_read(&dev->bytes_identical));
 }
 
-static ssize_t metrics_kbytes_sent_show(struct device *fbdev, 
+static ssize_t metrics_bytes_sent_show(struct device *fbdev, 
 				   struct device_attribute *a, char *buf) {
 	struct fb_info *fb_info = dev_get_drvdata(fbdev);
 	struct dlfb_data *dev = fb_info->par;
 	return snprintf(buf, PAGE_SIZE, "%u\n",
-			atomic_read(&dev->kbytes_sent));
+			atomic_read(&dev->bytes_sent));
 }
 
 static ssize_t metrics_cpu_kcycles_used_show(struct device *fbdev, 
@@ -1034,9 +1034,9 @@ static ssize_t metrics_reset_store(struct device *fbdev,
 	struct fb_info *fb_info = dev_get_drvdata(fbdev);
 	struct dlfb_data *dev = fb_info->par;
 
-	atomic_set(&dev->kbytes_rendered, 0);
-	atomic_set(&dev->kbytes_identical, 0);
-	atomic_set(&dev->kbytes_sent, 0);
+	atomic_set(&dev->bytes_rendered, 0);
+	atomic_set(&dev->bytes_identical, 0);
+	atomic_set(&dev->bytes_sent, 0);
 	atomic_set(&dev->cpu_kcycles_used, 0);
 	atomic_set(&dev->blit_count, 0);
 	atomic_set(&dev->copy_count, 0);
@@ -1048,9 +1048,9 @@ static ssize_t metrics_reset_store(struct device *fbdev,
 }
 
 static struct device_attribute fb_device_attrs[] = {
-	__ATTR_RO(metrics_kbytes_rendered),
-	__ATTR_RO(metrics_kbytes_identical),
-	__ATTR_RO(metrics_kbytes_sent),
+	__ATTR_RO(metrics_bytes_rendered),
+	__ATTR_RO(metrics_bytes_identical),
+	__ATTR_RO(metrics_bytes_sent),
 	__ATTR_RO(metrics_cpu_kcycles_used),
 	__ATTR_RO(metrics_apis_used),
 	__ATTR(metrics_reset, S_IWUGO, NULL, metrics_reset_store),
@@ -1155,9 +1155,11 @@ static int dlfb_probe(struct usb_interface *interface,
 	 * that were, in fact, unchanged -- wasting limited USB bandwidth
 	 */
 	dev->backing_buffer = vmalloc(videomemorysize);
-	if (!dev->backing_buffer)
-		dev_err(mydev, "No backing buffer allocated!\n");
-
+	if (!dev->backing_buffer) {
+		printk("udlfb: No backing buffer allocated!\n");
+	} else {
+		printk("udlfb: backing buffer - yes!\n");
+	}
 	info->fbops = &dlfb_ops;
 
 	var->vmode = FB_VMODE_NONINTERLACED;

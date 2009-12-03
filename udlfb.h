@@ -25,9 +25,9 @@ struct dlfb_data {
 	int base8d;
 	u32 pseudo_palette[256];
 	/* blit-only rendering path metrics, exposed through sysfs */
-	atomic_t kbytes_rendered; /* raw pixel-bytes driver asked to render */
-	atomic_t kbytes_identical; /* saved effort with backbuffer comparison */
-	atomic_t kbytes_sent; /* to usb, after compression including overhead */
+	atomic_t bytes_rendered; /* raw pixel-bytes driver asked to render */
+	atomic_t bytes_identical; /* saved effort with backbuffer comparison */
+	atomic_t bytes_sent; /* to usb, after compression including overhead */
 	atomic_t cpu_kcycles_used; /* transpired during pixel processing */
 	/* interface usage metrics. Clients can call driver via several */
 	atomic_t blit_count;
