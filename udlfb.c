@@ -1019,12 +1019,13 @@ static ssize_t metrics_apis_used_show(struct device *fbdev,
 	return snprintf(buf, PAGE_SIZE, 
 			"Calls to\ndamage: %u\nblit: %u\n"
 			"defio faults: %u\ncopy: %u\n"
-			"fill: %u\n",
+			"fill: %u\nShadow framebuffer in use? %s\n",
 			atomic_read(&dev->damage_count),
 			atomic_read(&dev->blit_count),
 			atomic_read(&dev->defio_fault_count),
 			atomic_read(&dev->copy_count),
-			atomic_read(&dev->fill_count));
+			atomic_read(&dev->fill_count),
+			(dev->backing_buffer) ? "yes" : "no");
 }
 
 static ssize_t metrics_reset_store(struct device *fbdev,
@@ -1155,11 +1156,9 @@ static int dlfb_probe(struct usb_interface *interface,
 	 * that were, in fact, unchanged -- wasting limited USB bandwidth
 	 */
 	dev->backing_buffer = vmalloc(videomemorysize);
-	if (!dev->backing_buffer) {
-		printk("udlfb: No backing buffer allocated!\n");
-	} else {
-		printk("udlfb: backing buffer - yes!\n");
-	}
+	if (!dev->backing_buffer)
+		dev_warn(mydev, "udlfb: No backing buffer allocated!\n");
+
 	info->fbops = &dlfb_ops;
 
 	var->vmode = FB_VMODE_NONINTERLACED;
