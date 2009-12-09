@@ -378,8 +378,7 @@ image_blit(struct dlfb_data *dev_info, int x, int y, int width, int height,
 	int i, j, base;
 	int rem = width;
 	int ret;
-
-	int firstdiff, thistime;
+	cycles_t start_cycles, end_cycles;
 
 	char *bufptr;
 
@@ -390,6 +389,8 @@ image_blit(struct dlfb_data *dev_info, int x, int y, int width, int height,
 		return -EINVAL;
 
 	mutex_lock(&dev_info->bulk_mutex);
+
+	start_cycles = get_cycles();
 
 	base =
 	    dev_info->base16 + ((dev_info->info->var.xres * 2 * y) + (x * 2));
@@ -403,7 +404,9 @@ image_blit(struct dlfb_data *dev_info, int x, int y, int width, int height,
 	for (i = y; i < y + height; i++) {
 
 		if (dev_info->bufend - bufptr < BUF_HIGH_WATER_MARK) {
-			ret = dlfb_bulk_msg(dev_info, bufptr - dev_info->buf);
+			int len =  bufptr - dev_info->buf;
+			ret = dlfb_bulk_msg(dev_info, len);
+			atomic_add(len, &dev_info->bytes_sent);
 			bufptr = dev_info->buf;
 		}
 
@@ -412,36 +415,37 @@ image_blit(struct dlfb_data *dev_info, int x, int y, int width, int height,
 		/* printk("WRITING LINE %d\n", i); */
 
 		while (rem) {
+			int firstdiff = 0;
+			int thistime;
 
 			if (dev_info->bufend - bufptr < BUF_HIGH_WATER_MARK) {
-				ret =
-				    dlfb_bulk_msg(dev_info,
-						  bufptr - dev_info->buf);
+				int len =  bufptr - dev_info->buf;
+				ret = dlfb_bulk_msg(dev_info, len);
+				atomic_add(len, &dev_info->bytes_sent);
 				bufptr = dev_info->buf;
 			}
+
 			// number of pixels to consider this time
 			thistime = rem;
 			if (thistime > 255)
 				thistime = 255;
 
 			if (dev_info->backing_buffer) {
+
 				/* find first pixel that has changed */
-				firstdiff = -1;
 				for (j = 0; j < thistime * 2; j++) {
 					if (dev_info->backing_buffer
 					    [base - dev_info->base16 + j]
-					    != data[j]) {
-						firstdiff = j / 2;
+					    != data[j])
 						break;
-					}
 				}
 
-			} else {
-				firstdiff = 0;
-
+				firstdiff = j/2;
+				atomic_add(j, &dev_info->bytes_identical);
 			}
 
-			if (firstdiff >= 0) {
+
+			if (firstdiff < thistime) {
 				char *end_of_rle;
 
 				end_of_rle =
@@ -504,8 +508,17 @@ image_blit(struct dlfb_data *dev_info, int x, int y, int width, int height,
 	}
 
 	if (bufptr > dev_info->buf) {
-		ret = dlfb_bulk_msg(dev_info, bufptr - dev_info->buf);
+		int len =  bufptr - dev_info->buf;
+       		ret = dlfb_bulk_msg(dev_info, len);
+		atomic_add(len, &dev_info->bytes_sent);
+		bufptr = dev_info->buf;
 	}
+
+	atomic_add(width*height*2, &dev_info->bytes_rendered);
+	end_cycles = get_cycles();
+	atomic_add(((unsigned int)end_cycles - (unsigned int)start_cycles)
+		   >> 10, /* Kcycles */
+		   &dev_info->cpu_kcycles_used);
 
 	mutex_unlock(&dev_info->bulk_mutex);
 
@@ -803,6 +816,7 @@ static void dlfb_copyarea(struct fb_info *info, const struct fb_copyarea *area)
 
 	copyarea(dev, area->dx, area->dy, area->sx, area->sy, area->width,
 		 area->height);
+	atomic_inc(&dev->copy_count);
 
 	/* printk("COPY AREA %d %d %d %d %d %d !!!\n", area->dx, area->dy, area->sx, area->sy, area->width, area->height); */
 
@@ -813,11 +827,15 @@ static void dlfb_imageblit(struct fb_info *info, const struct fb_image *image)
 
 	int ret;
 	struct dlfb_data *dev = info->par;
+
 	/* printk("IMAGE BLIT (1) %d %d %d %d DEPTH %d {%p}!!!\n", image->dx, image->dy, image->width, image->height, image->depth, dev->udev); */
+
 	cfb_imageblit(info, image);
 	ret =
 	    image_blit(dev, image->dx, image->dy, image->width, image->height,
 		       info->screen_base);
+	atomic_inc(&dev->blit_count);
+
 	/* printk("IMAGE BLIT (2) %d %d %d %d DEPTH %d {%p} %d!!!\n", image->dx, image->dy, image->width, image->height, image->depth, dev->udev, ret); */
 }
 
@@ -833,6 +851,8 @@ static void dlfb_fillrect(struct fb_info *info,
 	memcpy(&blue, &region->color + 2, 1);
 	draw_rect(dev, region->dx, region->dy, region->width, region->height,
 		  red, green, blue);
+	atomic_inc(&dev->fill_count);
+
 	/* printk("FILL RECT %d %d !!!\n", region->dx, region->dy); */
 
 }
@@ -872,6 +892,7 @@ static int dlfb_ioctl(struct fb_info *info, unsigned int cmd, unsigned long arg)
 	if (cmd == 0xAA) {
 		image_blit(dev_info, area->x, area->y, area->w, area->h,
 			   info->screen_base);
+		atomic_inc(&dev_info->damage_count);
 	}
 	if (cmd == 0xAC) {
 		copyfb(dev_info);
@@ -975,6 +996,84 @@ static struct fb_ops dlfb_ops = {
 	.fb_set_par = dlfb_set_par,
 };
 
+
+static ssize_t metrics_bytes_rendered_show(struct device *fbdev, 
+				   struct device_attribute *a, char *buf) {
+	struct fb_info *fb_info = dev_get_drvdata(fbdev);
+	struct dlfb_data *dev = fb_info->par;
+	return snprintf(buf, PAGE_SIZE, "%u\n",
+			atomic_read(&dev->bytes_rendered));
+}
+
+static ssize_t metrics_bytes_identical_show(struct device *fbdev, 
+				   struct device_attribute *a, char *buf) {
+	struct fb_info *fb_info = dev_get_drvdata(fbdev);
+	struct dlfb_data *dev = fb_info->par;
+	return snprintf(buf, PAGE_SIZE, "%u\n",
+			atomic_read(&dev->bytes_identical));
+}
+
+static ssize_t metrics_bytes_sent_show(struct device *fbdev, 
+				   struct device_attribute *a, char *buf) {
+	struct fb_info *fb_info = dev_get_drvdata(fbdev);
+	struct dlfb_data *dev = fb_info->par;
+	return snprintf(buf, PAGE_SIZE, "%u\n",
+			atomic_read(&dev->bytes_sent));
+}
+
+static ssize_t metrics_cpu_kcycles_used_show(struct device *fbdev, 
+				   struct device_attribute *a, char *buf) {
+	struct fb_info *fb_info = dev_get_drvdata(fbdev);
+	struct dlfb_data *dev = fb_info->par;
+	return snprintf(buf, PAGE_SIZE, "%u\n",
+			atomic_read(&dev->cpu_kcycles_used));
+}
+
+static ssize_t metrics_apis_used_show(struct device *fbdev, 
+				   struct device_attribute *a, char *buf) {
+	struct fb_info *fb_info = dev_get_drvdata(fbdev);
+	struct dlfb_data *dev = fb_info->par;
+	return snprintf(buf, PAGE_SIZE, 
+			"Calls to\ndamage: %u\nblit: %u\n"
+			"defio faults: %u\ncopy: %u\n"
+			"fill: %u\nShadow framebuffer in use? %s\n",
+			atomic_read(&dev->damage_count),
+			atomic_read(&dev->blit_count),
+			atomic_read(&dev->defio_fault_count),
+			atomic_read(&dev->copy_count),
+			atomic_read(&dev->fill_count),
+			(dev->backing_buffer) ? "yes" : "no");
+}
+
+static ssize_t metrics_reset_store(struct device *fbdev,
+			   struct device_attribute *attr,
+			   const char *buf, size_t count)
+{
+	struct fb_info *fb_info = dev_get_drvdata(fbdev);
+	struct dlfb_data *dev = fb_info->par;
+
+	atomic_set(&dev->bytes_rendered, 0);
+	atomic_set(&dev->bytes_identical, 0);
+	atomic_set(&dev->bytes_sent, 0);
+	atomic_set(&dev->cpu_kcycles_used, 0);
+	atomic_set(&dev->blit_count, 0);
+	atomic_set(&dev->copy_count, 0);
+	atomic_set(&dev->fill_count, 0);
+	atomic_set(&dev->defio_fault_count, 0);
+	atomic_set(&dev->damage_count, 0);
+
+	return count;
+}
+
+static struct device_attribute fb_device_attrs[] = {
+	__ATTR_RO(metrics_bytes_rendered),
+	__ATTR_RO(metrics_bytes_identical),
+	__ATTR_RO(metrics_bytes_sent),
+	__ATTR_RO(metrics_cpu_kcycles_used),
+	__ATTR_RO(metrics_apis_used),
+	__ATTR(metrics_reset, S_IWUGO, NULL, metrics_reset_store),
+};
+
 static int dlfb_probe(struct usb_interface *interface,
 			const struct usb_device_id *id)
 {
@@ -983,6 +1082,7 @@ static int dlfb_probe(struct usb_interface *interface,
 	struct dlfb_data *dev;
 	struct fb_info *info;
 	int videomemorysize;
+	int i;
 	unsigned char *videomemory;
 	int retval = -ENOMEM;
 	struct fb_var_screeninfo *var;
@@ -1072,9 +1172,9 @@ static int dlfb_probe(struct usb_interface *interface,
 	 * But with imperfect damage info we may end up sending pixels over USB
 	 * that were, in fact, unchanged -- wasting limited USB bandwidth
 	 */
-	dev->backing_buffer = vmalloc(dev->screen_size);
+	dev->backing_buffer = vmalloc(videomemorysize);
 	if (!dev->backing_buffer)
-		dev_info(mydev, "No backing buffer allocated!\n");
+		dev_warn(mydev, "udlfb: No backing buffer allocated!\n");
 
 	info->fbops = &dlfb_ops;
 
@@ -1105,11 +1205,15 @@ static int dlfb_probe(struct usb_interface *interface,
 	if (retval < 0)
 		goto err_regfb;
 
+	for (i = 0; i < ARRAY_SIZE(fb_device_attrs); i++) {
+		device_create_file(info->dev, &fb_device_attrs[i]);
+	}
+
 	/* paint "successful" green screen */
 	draw_rect(dev, 0, 0, dev->info->var.xres,
 		  dev->info->var.yres, 0x30, 0xff, 0x30);
 
-	dev_info(mydev, "DisplayLink USB device %d now attached, "
+	dev_err(mydev, "DisplayLink USB device %d now attached, "
 			"using %dK of memory\n", info->node,
 		 ((dev->backing_buffer) ?
 		  videomemorysize * 2 : videomemorysize) >> 10);
