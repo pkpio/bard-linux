@@ -15,7 +15,9 @@ struct dlfb_data {
 	char *bufend;
 	char *backing_buffer;
 	struct mutex bulk_mutex;
+	atomic_t fb_count;
 	char edid[128];
+	int sku_pixel_limit;
 	int screen_size;
 	int line_length;
 	struct completion done;
@@ -43,7 +45,7 @@ static void dlfb_bulk_callback(struct urb *urb)
 	complete(&dev_info->done);
 }
 
-static void dlfb_edid(struct dlfb_data *dev_info)
+static void dlfb_get_edid(struct dlfb_data *dev_info)
 {
 	int i;
 	int ret;

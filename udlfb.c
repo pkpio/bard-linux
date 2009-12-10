@@ -270,22 +270,6 @@ static int dlfb_select_std_channel(struct dlfb_data *dev)
 	return ret;
 }
 
-
-/*
- * Query EDID from the handware, then hand it off to fbdev's edid parse
- * routine which should give us back a filled in screeninfo structure.
- */
-static int dlfb_get_var_from_edid(struct dlfb_data *dev,
-					struct fb_var_screeninfo *var)
-{
-	int ret;
-
-	dlfb_edid(dev);
-	ret = fb_parse_edid(dev->edid, var);
-
-	return ret;
-}
-
 static int dlfb_mmap(struct fb_info *info, struct vm_area_struct *vma)
 {
 	unsigned long start = vma->vm_start;
@@ -509,7 +493,7 @@ image_blit(struct dlfb_data *dev_info, int x, int y, int width, int height,
 
 	if (bufptr > dev_info->buf) {
 		int len =  bufptr - dev_info->buf;
-       		ret = dlfb_bulk_msg(dev_info, len);
+		ret = dlfb_bulk_msg(dev_info, len);
 		atomic_add(len, &dev_info->bytes_sent);
 		bufptr = dev_info->buf;
 	}
@@ -865,7 +849,7 @@ static int dlfb_ioctl(struct fb_info *info, unsigned int cmd, unsigned long arg)
 
 	if (cmd == 0xAD) {
 		char *edid = (char *)arg;
-		dlfb_edid(dev_info);
+		dlfb_get_edid(dev_info);
 		if (copy_to_user(edid, dev_info->edid, 128)) {
 			return -EFAULT;
 		}
@@ -942,13 +926,62 @@ dlfb_setcolreg(unsigned regno, unsigned red, unsigned green,
 	return err;
 }
 
+static int dlfb_open(struct fb_info *info, int user)
+{
+
+/*
+ * We could prevent fbcon from using the framebuffer here
+ *	if (user == 0)
+ *		return -EBUSY;
+ */
+	return 0;
+}
+
 static int dlfb_release(struct fb_info *info, int user)
 {
 	struct dlfb_data *dev_info = info->par;
+
 	image_blit(dev_info, 0, 0, info->var.xres, info->var.yres,
 		   info->screen_base);
 	return 0;
 }
+
+/*
+ * Check whether a video mode is supported by the DisplayLink chip
+ * We start from monitor's modes, so don't need to filter that here
+ */
+static int dlfb_is_valid_mode(struct fb_videomode *mode,
+		struct fb_info *info)
+{
+	struct dlfb_data *dev = info->par;
+
+	if (mode->xres * mode->yres > dev->sku_pixel_limit)
+		return 0;
+
+	return 1;
+}
+
+static int dlfb_check_var(struct fb_var_screeninfo *var, struct fb_info *info)
+{
+	struct fb_videomode mode;
+
+	/* TODO: support dynamically changing framebuffer size */
+	if ((var->xres * var->yres * 2) > info->fix.smem_len)
+		return -EINVAL;
+
+	fb_var_to_videomode(&mode, var);
+
+	if (!dlfb_is_valid_mode(&mode, info))
+		return -EINVAL;
+
+	return 0;
+}
+
+static int dlfb_set_par(struct fb_info *info) {
+
+	return dlfb_set_video_mode(info->par, &info->var);
+}
+
 
 static int dlfb_blank(int blank_mode, struct fb_info *info)
 {
@@ -968,21 +1001,6 @@ static int dlfb_blank(int blank_mode, struct fb_info *info)
 	return 0;
 }
 
-static int dlfb_check_var(struct fb_var_screeninfo *var, struct fb_info *info)
-{
-	/* TODO: support dynamically increasing framebuffer size */
-	if ((var->xres * var->yres * 2) >
-	    info->fix.smem_len)
-		return -EINVAL;
-
-	return 0;
-}
-
-static int dlfb_set_par(struct fb_info *info) {
-	
-	return dlfb_set_video_mode(info->par, info->var);
-}
-
 static struct fb_ops dlfb_ops = {
 	.fb_setcolreg = dlfb_setcolreg,
 	.fb_fillrect = dlfb_fillrect,
@@ -990,14 +1008,16 @@ static struct fb_ops dlfb_ops = {
 	.fb_imageblit = dlfb_imageblit,
 	.fb_mmap = dlfb_mmap,
 	.fb_ioctl = dlfb_ioctl,
+	.fb_open = dlfb_open,
 	.fb_release = dlfb_release,
 	.fb_blank = dlfb_blank,
 	.fb_check_var = dlfb_check_var,
 	.fb_set_par = dlfb_set_par,
+
 };
 
 
-static ssize_t metrics_bytes_rendered_show(struct device *fbdev, 
+static ssize_t metrics_bytes_rendered_show(struct device *fbdev,
 				   struct device_attribute *a, char *buf) {
 	struct fb_info *fb_info = dev_get_drvdata(fbdev);
 	struct dlfb_data *dev = fb_info->par;
@@ -1005,7 +1025,7 @@ static ssize_t metrics_bytes_rendered_show(struct device *fbdev,
 			atomic_read(&dev->bytes_rendered));
 }
 
-static ssize_t metrics_bytes_identical_show(struct device *fbdev, 
+static ssize_t metrics_bytes_identical_show(struct device *fbdev,
 				   struct device_attribute *a, char *buf) {
 	struct fb_info *fb_info = dev_get_drvdata(fbdev);
 	struct dlfb_data *dev = fb_info->par;
@@ -1013,7 +1033,7 @@ static ssize_t metrics_bytes_identical_show(struct device *fbdev,
 			atomic_read(&dev->bytes_identical));
 }
 
-static ssize_t metrics_bytes_sent_show(struct device *fbdev, 
+static ssize_t metrics_bytes_sent_show(struct device *fbdev,
 				   struct device_attribute *a, char *buf) {
 	struct fb_info *fb_info = dev_get_drvdata(fbdev);
 	struct dlfb_data *dev = fb_info->par;
@@ -1021,7 +1041,7 @@ static ssize_t metrics_bytes_sent_show(struct device *fbdev,
 			atomic_read(&dev->bytes_sent));
 }
 
-static ssize_t metrics_cpu_kcycles_used_show(struct device *fbdev, 
+static ssize_t metrics_cpu_kcycles_used_show(struct device *fbdev,
 				   struct device_attribute *a, char *buf) {
 	struct fb_info *fb_info = dev_get_drvdata(fbdev);
 	struct dlfb_data *dev = fb_info->par;
@@ -1029,11 +1049,11 @@ static ssize_t metrics_cpu_kcycles_used_show(struct device *fbdev,
 			atomic_read(&dev->cpu_kcycles_used));
 }
 
-static ssize_t metrics_apis_used_show(struct device *fbdev, 
+static ssize_t metrics_apis_used_show(struct device *fbdev,
 				   struct device_attribute *a, char *buf) {
 	struct fb_info *fb_info = dev_get_drvdata(fbdev);
 	struct dlfb_data *dev = fb_info->par;
-	return snprintf(buf, PAGE_SIZE, 
+	return snprintf(buf, PAGE_SIZE,
 			"Calls to\ndamage: %u\nblit: %u\n"
 			"defio faults: %u\ncopy: %u\n"
 			"fill: %u\nShadow framebuffer in use? %s\n",
@@ -1073,6 +1093,71 @@ static struct device_attribute fb_device_attrs[] = {
 	__ATTR_RO(metrics_apis_used),
 	__ATTR(metrics_reset, S_IWUGO, NULL, metrics_reset_store),
 };
+
+/*
+ * Calls dlfb_get_edid() to query the EDID of attached monitor via usb cmds
+ * Stores the returnedEDID blob in dev->edid
+ * Then parses EDID into three places used by various parts of fbdev:
+ * fb_var_screeninfo contains the timing of the monitor's preferred mode
+ * fb_info.monspecs is full parsed EDID info, including monspecs.modedb
+ * fb_info.modelist is a linked list of all monitor & VESA modes which work
+ *
+ * If EDID is not readable/valid, then modelist is all VESA modes,
+ * monspecs is NULL, and fb_var_screeninfo is set to safe VESA mode
+ *
+ */
+static void dlfb_parse_edid(struct dlfb_data *dev,
+			    struct fb_var_screeninfo *var,
+			    struct fb_info *info)
+{
+	int i;
+	const struct fb_videomode *default_vmode = NULL;
+
+	fb_destroy_modelist(&info->modelist);
+	memset(&info->monspecs, 0, sizeof(info->monspecs));
+
+	dlfb_get_edid(dev);
+	fb_edid_to_monspecs(dev->edid, &info->monspecs);
+
+	if (info->monspecs.modedb_len > 0) {
+
+		for (i = 0; i < info->monspecs.modedb_len; i++) {
+			if (dlfb_is_valid_mode(&info->monspecs.modedb[i], info))
+				fb_add_videomode(&info->monspecs.modedb[i],
+					&info->modelist);
+		}
+
+		default_vmode = fb_find_best_display(&info->monspecs,
+						     &info->modelist);
+	} else {
+		struct fb_videomode fb_vmode = {0};
+
+		/*
+		 * Add the standard VESA modes to our modelist
+		 * Since we don't have EDID, there may be modes that
+		 * overspec monitor and/or are incorrect aspect ratio, etc.
+		 * But at least the user has a chance to choose
+		 */
+		for (i = 0; i < VESA_MODEDB_SIZE; i++) {
+			if (dlfb_is_valid_mode((struct fb_videomode *)
+						&vesa_modes[i], info))
+				fb_add_videomode(&vesa_modes[i],
+						 &info->modelist);
+		}
+
+		/*
+		 * default to resolution safe for projectors
+		 * (since they are most common case without EDID)
+		 */
+		fb_vmode.xres = 800;
+		fb_vmode.yres = 600;
+		fb_vmode.refresh = 60;
+		default_vmode = fb_find_nearest_mode(&fb_vmode,
+						     &info->modelist);
+	}
+
+	fb_videomode_to_var(var, default_vmode);
+}
 
 static int dlfb_probe(struct usb_interface *interface,
 			const struct usb_device_id *id)
@@ -1132,13 +1217,12 @@ static int dlfb_probe(struct usb_interface *interface,
 	info->pseudo_palette = dev->pseudo_palette;
 
 	var = &info->var;
-	retval = dlfb_get_var_from_edid(dev, var);
-	if (retval) {
-		/* had a problem getting edid. so fallback to 640x480 */
-		dev_err(mydev, "Problem %d with EDID.\n", retval);
-		var->xres = 640;
-		var->yres = 480;
-	}
+
+	/* TODO set limit based on actual SKU detection */
+	dev->sku_pixel_limit = 2048 * 1152;
+
+	INIT_LIST_HEAD(&info->modelist);
+	dlfb_parse_edid(dev, var, info);
 
 	/*
 	 * ok, now that we've got the size info, we can alloc our framebuffer.
@@ -1225,6 +1309,9 @@ err_cmap:
 	/* TODO: fb_deferred_io_cleanup(info); */
 	vfree(videomemory);
 err_vidmem:
+	if (info->monspecs.modedb)
+		fb_destroy_modedb(info->monspecs.modedb);
+	fb_destroy_modelist(&info->modelist);
 	framebuffer_release(info);
 err_fballoc:
 	kfree(dev->buf);
@@ -1259,6 +1346,9 @@ static void dlfb_disconnect(struct usb_interface *interface)
 						info->node);
 		unregister_framebuffer(info);
 		fb_dealloc_cmap(&info->cmap);
+		if (info->monspecs.modedb)
+			fb_destroy_modedb(info->monspecs.modedb);
+		fb_destroy_modelist(&info->modelist);
 		/* TODO: fb_deferred_io_cleanup(info); */
 		fb_dealloc_cmap(&info->cmap);
 		vfree((void __force *)info->screen_base);
