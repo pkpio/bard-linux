@@ -30,13 +30,13 @@
 #define DRIVER_VERSION "DisplayLink Framebuffer Driver 0.4.1"
 
 static struct fb_fix_screeninfo dlfb_fix = {
-       .id =           "displaylinkfb",
-       .type =         FB_TYPE_PACKED_PIXELS,
-       .visual =       FB_VISUAL_TRUECOLOR,
-       .xpanstep =     0,
-       .ypanstep =     0,
-       .ywrapstep =    0,
-       .accel =        FB_ACCEL_NONE,
+	.id =           "displaylinkfb",
+	.type =         FB_TYPE_PACKED_PIXELS,
+	.visual =       FB_VISUAL_TRUECOLOR,
+	.xpanstep =     0,
+	.ypanstep =     0,
+	.ywrapstep =    0,
+	.accel =        FB_ACCEL_NONE,
 };
 
 #define NR_USB_REQUEST_I2C_SUB_IO 0x02
@@ -48,21 +48,21 @@ static struct fb_fix_screeninfo dlfb_fix = {
  */
 static char *insert_command(char *buf, u8 reg, u8 val)
 {
-       *buf++ = 0xAF;
-       *buf++ = 0x20;
-       *buf++ = reg;
-       *buf++ = val;
-       return buf;
+	*buf++ = 0xAF;
+	*buf++ = 0x20;
+	*buf++ = reg;
+	*buf++ = val;
+	return buf;
 }
 
 static char *insert_vidreg_lock(char *buf)
 {
-       return insert_command(buf, 0xFF, 0x00);
+	return insert_command(buf, 0xFF, 0x00);
 }
 
 static char *insert_vidreg_unlock(char *buf)
 {
-       return insert_command(buf, 0xFF, 0xFF);
+	return insert_command(buf, 0xFF, 0xFF);
 }
 
 /*
@@ -71,33 +71,33 @@ static char *insert_vidreg_unlock(char *buf)
  */
 static char *insert_enable_hvsync(char *buf)
 {
-       return insert_command(buf, 0x1F, 0x00);
+	return insert_command(buf, 0x1F, 0x00);
 }
 
 static char *insert_set_color_depth(char *buf, u8 selection)
 {
-       return insert_command(buf, 0x00, selection);
+	return insert_command(buf, 0x00, selection);
 }
 
 static char *insert_set_base16bpp(char *wrptr, u32 base)
 {
-       /* the base pointer is 16 bits wide, 0x20 is hi byte. */
-       wrptr = insert_command(wrptr, 0x20, base >> 16);
-       wrptr = insert_command(wrptr, 0x21, base >> 8);
-       return insert_command(wrptr, 0x22, base);
+	/* the base pointer is 16 bits wide, 0x20 is hi byte. */
+	wrptr = insert_command(wrptr, 0x20, base >> 16);
+	wrptr = insert_command(wrptr, 0x21, base >> 8);
+	return insert_command(wrptr, 0x22, base);
 }
 
 static char *insert_set_base8bpp(char *wrptr, u32 base)
 {
-       wrptr = insert_command(wrptr, 0x26, base >> 16);
-       wrptr = insert_command(wrptr, 0x27, base >> 8);
-       return insert_command(wrptr, 0x28, base);
+	wrptr = insert_command(wrptr, 0x26, base >> 16);
+	wrptr = insert_command(wrptr, 0x27, base >> 8);
+	return insert_command(wrptr, 0x28, base);
 }
 
 static char *insert_command_16(char *wrptr, u8 reg, u16 value)
 {
-       wrptr = insert_command(wrptr, reg, value >> 8);
-       return insert_command(wrptr, reg+1, value);
+	wrptr = insert_command(wrptr, reg, value >> 8);
+	return insert_command(wrptr, reg+1, value);
 }
 
 /*
@@ -106,8 +106,8 @@ static char *insert_command_16(char *wrptr, u8 reg, u16 value)
  */
 static char *insert_command_16be(char *wrptr, u8 reg, u16 value)
 {
-       wrptr = insert_command(wrptr, reg, value);
-       return insert_command(wrptr, reg+1, value >> 8);
+	wrptr = insert_command(wrptr, reg, value);
+	return insert_command(wrptr, reg+1, value >> 8);
 }
 
 /*
@@ -350,7 +350,7 @@ static char *rle_compress16(uint16_t * src, char *dst, int rem)
 }
 
 /*
-Thanks to Henrik Bjerregaard Pedersen for rle implementation and code refactoring.
+Thanks to Henrik Bjerregaard Pedersen for rle implementation and refactoring
 Next step is huffman compression.
 */
 
@@ -455,7 +455,7 @@ image_blit(struct dlfb_data *dev_info, int x, int y, int width, int height,
 					bufptr = end_of_rle;
 
 				} else {
-					// fallback to raw (or some other encoding?)
+					// fallback to raw
 					*bufptr++ = 0xAF;
 					*bufptr++ = 0x68;
 
@@ -802,8 +802,6 @@ static void dlfb_copyarea(struct fb_info *info, const struct fb_copyarea *area)
 		 area->height);
 	atomic_inc(&dev->copy_count);
 
-	/* printk("COPY AREA %d %d %d %d %d %d !!!\n", area->dx, area->dy, area->sx, area->sy, area->width, area->height); */
-
 }
 
 static void dlfb_imageblit(struct fb_info *info, const struct fb_image *image)
@@ -812,7 +810,6 @@ static void dlfb_imageblit(struct fb_info *info, const struct fb_image *image)
 	int ret;
 	struct dlfb_data *dev = info->par;
 
-	/* printk("IMAGE BLIT (1) %d %d %d %d DEPTH %d {%p}!!!\n", image->dx, image->dy, image->width, image->height, image->depth, dev->udev); */
 
 	cfb_imageblit(info, image);
 	ret =
@@ -820,7 +817,6 @@ static void dlfb_imageblit(struct fb_info *info, const struct fb_image *image)
 		       info->screen_base);
 	atomic_inc(&dev->blit_count);
 
-	/* printk("IMAGE BLIT (2) %d %d %d %d DEPTH %d {%p} %d!!!\n", image->dx, image->dy, image->width, image->height, image->depth, dev->udev, ret); */
 }
 
 static void dlfb_fillrect(struct fb_info *info,
