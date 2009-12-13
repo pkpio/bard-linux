@@ -19,7 +19,6 @@ struct dlfb_data {
 	char edid[128];
 	int sku_pixel_limit;
 	int screen_size;
-	int line_length;
 	struct completion done;
 	int base16;
 	int base16d;

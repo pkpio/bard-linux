@@ -323,191 +323,230 @@ MODULE_DEVICE_TABLE(usb, id_table);
 
 static struct usb_driver dlfb_driver;
 
-// thanks to Henrik Bjerregaard Pedersen for this function
-static char *rle_compress16(uint16_t * src, char *dst, int rem)
+#define MAX_CMD_PIXELS		255
+#define MIN_RLX_PIX_BYTES       4
+#define MIN_RLX_CMD_BYTES	(7 + MIN_RLX_PIX_BYTES)
+
+#define MIN(a,b) ((a)>(b)?(b):(a))
+
+/* 
+Render a command stream for an encoded horizontal line segment of pixels.
+The fundamental building block of rendering for current Displaylink devices.
+
+A command buffer holds several commands.
+It always begins with a fresh command header
+(the protocol doesn't require this, but we enforce it to allow
+multiple buffers to be potentially encoded and sent in parallel).
+A single command encodes one contiguous horizontal line of pixels
+In the form of spans of raw and RLE-encoded pixels.
+
+The function relies on the client to do all allocation, so that
+rendering can be done directly to output buffers (e.g. USB URBs).
+The function fills the supplied command buffer, providing information
+on where it left off, so the client may call in again with additional
+buffers if the line will take several buffers to complete.
+
+A single command can transmit a maximum of 256 pixels,
+regardless of the compression ratio (protocol design limit).
+To the hardware, 0 for a size byte means 256
+*/
+void dlfb_render_rgb565_hline_rlx(
+	const uint16_t* *pixel_start_ptr,
+	const uint16_t*	const pixel_end,
+	uint32_t *device_address_ptr,
+	uint8_t* *command_buffer_ptr,
+	const uint8_t* const cmd_buffer_end)
 {
+	const uint16_t* pixel = *pixel_start_ptr;
+	uint32_t dev_addr  = *device_address_ptr;
+	uint8_t* cmd = *command_buffer_ptr;
 
-	int rl;
-	uint16_t pix0;
-	char *end_if_raw = dst + 6 + 2 * rem;
+	while ((pixel_end > pixel) &&
+	       (cmd_buffer_end - MIN_RLX_CMD_BYTES > cmd))
+	{
+		uint8_t *raw_pixels_count_byte = 0;
+		uint8_t *cmd_pixels_count_byte = 0;
+		const uint16_t *raw_pixel_start = 0;
+		const uint16_t *cmd_pixel_start, *cmd_pixel_end = 0;
+		const uint32_t be_dev_addr = htonl(dev_addr);
 
-	dst += 6;		// header will be filled in if RLE is worth it
+		*cmd++ = 0xAF;
+		*cmd++ = 0x6B;
+		*cmd++ = (uint8_t) ((be_dev_addr >> 8) & 0xFF);
+		*cmd++ = (uint8_t) ((be_dev_addr >> 16) & 0xFF);
+		*cmd++ = (uint8_t) ((be_dev_addr >> 24) & 0xFF);
 
-	while (rem && dst < end_if_raw) {
-		char *start = (char *)src;
+		cmd_pixels_count_byte = cmd++; /*  we'll know this later */
+		cmd_pixel_start = pixel;
 
-		pix0 = *src++;
-		rl = 1;
-		rem--;
-		while (rem && *src == pix0)
-			rem--, rl++, src++;
-		*dst++ = rl;
-		*dst++ = start[1];
-		*dst++ = start[0];
+		raw_pixels_count_byte = cmd++; /*  we'll know this later */
+		raw_pixel_start = pixel;
+
+		cmd_pixel_end = pixel +
+			MIN(pixel_end - pixel, MAX_CMD_PIXELS + 1);
+
+		while ((pixel < cmd_pixel_end) &&
+		       (cmd_buffer_end - MIN_RLX_PIX_BYTES > cmd))
+		{
+			const uint16_t* const repeating_pixel = pixel;
+			const uint16_t be_pixel = htons(*pixel);
+
+			*cmd++ = (be_pixel) & 0xFF;
+			*cmd++ = (be_pixel >> 8) & 0xFF;
+			pixel++;
+
+			while ((pixel < cmd_pixel_end)
+			       && (*pixel == *repeating_pixel))
+			{
+				pixel++;
+			}
+
+			if (pixel > repeating_pixel + 2)
+			{
+				/* We've got (to the end of) an RLE span worth
+				 * encoding go back and finalize length of last
+				 * raw span
+				 */
+
+				*raw_pixels_count_byte = ((repeating_pixel -
+						raw_pixel_start) + 1) & 0xFF;
+				/*
+				 * Immediately following the end of raw data
+				 * is a byte telling how many additional times
+				 * to repeat the last raw pixel
+				 */
+				 *cmd++ = ((pixel - repeating_pixel)-1) & 0xFF;
+
+				 /* Start a new raw span */
+				 raw_pixel_start = pixel;
+
+				 /*
+				  * hardware expects next byte to be number of
+				  * raw pixels in the next span. We don't know
+				  * that yet, fill in later
+				  */
+				 raw_pixels_count_byte = cmd++;
+
+			} else {
+				/* Back up and process as raw pixels */
+				pixel = repeating_pixel + 1;
+			}
+
+		}
+
+		if (pixel > raw_pixel_start)
+		{
+			/* finalize last RAW span */
+			*raw_pixels_count_byte = (pixel-raw_pixel_start) & 0xFF;
+		}
+
+		*cmd_pixels_count_byte = (pixel - cmd_pixel_start) & 0xFF;
+		dev_addr += (pixel - cmd_pixel_start) * 2;
 	}
 
-	return dst;
+	if (cmd_buffer_end <= MIN_RLX_CMD_BYTES + cmd)
+	{
+		/* Fill leftover bytes with no-ops */
+		if (cmd_buffer_end > cmd)
+			memset(cmd, 0xAF, cmd_buffer_end - cmd);
+		cmd = (uint8_t*) cmd_buffer_end;
+	}
+
+	*command_buffer_ptr = cmd;
+	*pixel_start_ptr = pixel;
+	*device_address_ptr = dev_addr;
+
+	return;
 }
 
-/*
-Thanks to Henrik Bjerregaard Pedersen for rle implementation and refactoring
-Next step is huffman compression.
-*/
-
-static int
-image_blit(struct dlfb_data *dev_info, int x, int y, int width, int height,
-	   char *data)
+int image_blit(struct dlfb_data *dev, int x, int y,
+	       int width, int height, char *data)
 {
+	const int host_pixel_size = 2;
+	const int device_pixel_size = 2;
+	int i, j, k, ret;
+	char *cmd, *cmd_end;
 
-	int i, j, base;
-	int rem = width;
-	int ret;
-	cycles_t start_cycles, end_cycles;
+	mutex_lock(&dev->bulk_mutex);
 
-	char *bufptr;
+	cmd = dev->buf;
+	cmd_end = dev->bufend - BUF_HIGH_WATER_MARK;
 
-	if (x + width > dev_info->info->var.xres)
+	if ((width <= 0) ||
+	    (x + width > dev->info->var.xres) ||
+	    (y + height > dev->info->var.yres))
 		return -EINVAL;
 
-	if (y + height > dev_info->info->var.yres)
-		return -EINVAL;
+	for (i = y; i < y + height ; i++) {
+		const uint16_t *line_start, *line_end, *back_start, *next_pixel;
+		const int line_length = dev->info->fix.line_length * i;
+		uint32_t dev_addr = dev->base16 + line_length +
+			(x * device_pixel_size);
 
-	mutex_lock(&dev_info->bulk_mutex);
+		line_start = (uint16_t *) (data + line_length +
+					   (x * host_pixel_size));
+		next_pixel = line_start;
+		line_end = &line_start[width+1];
+		back_start = (uint16_t *) (dev->backing_buffer + line_length +
+					   (x * host_pixel_size));
 
-	start_cycles = get_cycles();
-
-	base =
-	    dev_info->base16 + ((dev_info->info->var.xres * 2 * y) + (x * 2));
-
-	data += (dev_info->info->var.xres * 2 * y) + (x * 2);
-
-	/* printk("IMAGE_BLIT\n"); */
-
-	bufptr = dev_info->buf;
-
-	for (i = y; i < y + height; i++) {
-
-		if (dev_info->bufend - bufptr < BUF_HIGH_WATER_MARK) {
-			int len =  bufptr - dev_info->buf;
-			ret = dlfb_bulk_msg(dev_info, len);
-			atomic_add(len, &dev_info->bytes_sent);
-			bufptr = dev_info->buf;
+		/* adjust line_start to first pixel that actually changed */
+		for (j = 0; j < width; j++)
+		{
+			if (back_start[j] != line_start[j])
+			{
+				next_pixel = &next_pixel[j];
+				dev_addr += j * device_pixel_size;
+				break;
+			}
 		}
 
-		rem = width;
+		if (j == width)
+		{
+			/* no actual changes in this line */
+			next_pixel = line_end;
 
-		/* printk("WRITING LINE %d\n", i); */
+		} else {
 
-		while (rem) {
-			int firstdiff = 0;
-			int thistime;
-
-			if (dev_info->bufend - bufptr < BUF_HIGH_WATER_MARK) {
-				int len =  bufptr - dev_info->buf;
-				ret = dlfb_bulk_msg(dev_info, len);
-				atomic_add(len, &dev_info->bytes_sent);
-				bufptr = dev_info->buf;
-			}
-
-			// number of pixels to consider this time
-			thistime = rem;
-			if (thistime > 255)
-				thistime = 255;
-
-			if (dev_info->backing_buffer) {
-
-				/* find first pixel that has changed */
-				for (j = 0; j < thistime * 2; j++) {
-					if (dev_info->backing_buffer
-					    [base - dev_info->base16 + j]
-					    != data[j])
-						break;
-				}
-
-				firstdiff = j/2;
-				atomic_add(j, &dev_info->bytes_identical);
-			}
-
-
-			if (firstdiff < thistime) {
-				char *end_of_rle;
-
-				end_of_rle =
-				    rle_compress16((uint16_t *) (data +
-								 firstdiff * 2),
-						   bufptr,
-						   thistime - firstdiff);
-
-				if (end_of_rle <
-				    bufptr + 6 + 2 * (thistime - firstdiff)) {
-					bufptr[0] = 0xAF;
-					bufptr[1] = 0x69;
-
-					bufptr[2] =
-					    (char)((base +
-						    firstdiff * 2) >> 16);
-					bufptr[3] =
-					    (char)((base + firstdiff * 2) >> 8);
-					bufptr[4] =
-					    (char)(base + firstdiff * 2);
-					bufptr[5] = thistime - firstdiff;
-
-					bufptr = end_of_rle;
-
-				} else {
-					// fallback to raw
-					*bufptr++ = 0xAF;
-					*bufptr++ = 0x68;
-
-					*bufptr++ =
-					    (char)((base +
-						    firstdiff * 2) >> 16);
-					*bufptr++ =
-					    (char)((base + firstdiff * 2) >> 8);
-					*bufptr++ =
-					    (char)(base + firstdiff * 2);
-					*bufptr++ = thistime - firstdiff;
-					// PUT COMPRESSION HERE
-					for (j = firstdiff * 2;
-					     j < thistime * 2; j += 2) {
-						*bufptr++ = data[j + 1];
-						*bufptr++ = data[j];
-					}
+			/* adjust line_end to last pixel that changed */
+			for (k = (width-1); k > j; k--)
+			{
+				if (back_start[k] != line_start[k])
+				{
+					line_end = &line_start[k+1];
+					break;
 				}
 			}
-
-			base += thistime * 2;
-			data += thistime * 2;
-			rem -= thistime;
 		}
 
-		if (dev_info->backing_buffer)
-			memcpy(dev_info->backing_buffer +
-			       (base - dev_info->base16) -
-			       (width * 2), data - (width * 2), width * 2);
+		while (next_pixel < line_end) {
 
-		base += (dev_info->info->var.xres * 2) - (width * 2);
-		data += (dev_info->info->var.xres * 2) - (width * 2);
+			dlfb_render_rgb565_hline_rlx(
+				&next_pixel,
+				line_end,
+				&dev_addr,
+				(uint8_t**) &cmd,
+				(uint8_t*)  cmd_end);
 
+			if (cmd >= cmd_end) {
+				ret = dlfb_bulk_msg(dev, cmd - dev->buf);
+				cmd = dev->buf;
+			}
+		}
+
+		memcpy((char*)back_start, (char*) line_start,
+		       width * host_pixel_size);
 	}
 
-	if (bufptr > dev_info->buf) {
-		int len =  bufptr - dev_info->buf;
-		ret = dlfb_bulk_msg(dev_info, len);
-		atomic_add(len, &dev_info->bytes_sent);
-		bufptr = dev_info->buf;
+	if (cmd > dev->buf)
+	{
+		/* Send partial buffer remaining before exiting */
+		ret = dlfb_bulk_msg(dev, cmd - dev->buf);
 	}
 
-	atomic_add(width*height*2, &dev_info->bytes_rendered);
-	end_cycles = get_cycles();
-	atomic_add(((unsigned int)end_cycles - (unsigned int)start_cycles)
-		   >> 10, /* Kcycles */
-		   &dev_info->cpu_kcycles_used);
+	mutex_unlock(&dev->bulk_mutex);
 
-	mutex_unlock(&dev_info->bulk_mutex);
-
-	return base;
-
+	return 0;
 }
 
 static int
