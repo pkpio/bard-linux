@@ -323,11 +323,50 @@ MODULE_DEVICE_TABLE(usb, id_table);
 
 static struct usb_driver dlfb_driver;
 
+#define BPP 2
 #define MAX_CMD_PIXELS		255
 #define MIN_RLX_PIX_BYTES       4
 #define MIN_RLX_CMD_BYTES	(7 + MIN_RLX_PIX_BYTES)
 
 #define MIN(a,b) ((a)>(b)?(b):(a))
+
+/*
+ * Trims identical pixels from front and back of line
+ * Sets start and end pixel indices
+ * And returns count of identical pixels
+ * TODO: optimized version (alignment, natural sizes)
+ */
+static int trim_hline(const u16 *front, const u16 *back, int width,
+				 int *start, int *end) {
+
+	u16 j, k;
+	u16 identical = width;
+
+	*start = width;
+	*end = width;
+
+	for (j = 0; j < width; j++)
+	{
+		if (back[j] != front[j])
+		{
+			*start = j;
+			identical = j;
+			break;
+		}
+	}
+
+	for (k = width - 1; k > j; k--)
+	{
+		if (back[k] != front[k])
+		{
+			*end = k+1;
+			identical += (width - 1) - k;
+			break;
+		}
+	}
+
+	return identical;
+}
 
 /* 
 Render a command stream for an encoded horizontal line segment of pixels.
@@ -462,11 +501,11 @@ static void render_hline(
 int image_blit(struct dlfb_data *dev, int x, int y,
 	       int width, int height, char *data)
 {
-	const int Bpp = 2;
-	int i, j, k, ret;
+	int i, ret;
 	char *cmd, *cmd_end;
 	cycles_t start_cycles, end_cycles;
-	int bytes_sent, bytes_identical = 0;
+	int bytes_sent = 0;
+	int bytes_identical = 0;
 
 	mutex_lock(&dev->bulk_mutex);
 
@@ -481,50 +520,29 @@ int image_blit(struct dlfb_data *dev, int x, int y,
 		return -EINVAL;
 
 	for (i = y; i < y + height ; i++) {
-		const uint16_t *line_start, *line_end, *back_start, *next_pixel;
+		const uint16_t *line_start, *line_end, *next_pixel, *back_start;
 		const int line_length = dev->info->fix.line_length * i;
-		uint32_t dev_addr = dev->base16 + line_length +	(x * Bpp);
+		const int byte_offset = line_length + (x * BPP);
+		uint32_t dev_addr = dev->base16 + byte_offset;
 
-		line_start = (uint16_t *) (data + line_length + (x * Bpp));
+		line_start = (uint16_t *) (data + byte_offset);
 		next_pixel = line_start;
 		line_end = &line_start[width+1];
 
+		back_start = (uint16_t *) (dev->backing_buffer + byte_offset);
+
 		if (dev->backing_buffer) {
+			int start = 0;
+			int end = 0;
+			int count;
 
-			back_start = (uint16_t *) (dev->backing_buffer +
-					 line_length + (x * Bpp));
+			count = trim_hline(line_start, back_start,
+					   width, &start, &end);
 
-			/* adjust line_start to first pixel actually changed */
-			for (j = 0; j < width; j++)
-			{
-				if (back_start[j] != line_start[j])
-				{
-					next_pixel = &next_pixel[j];
-					dev_addr += j * Bpp;
-					break;
-				}
-			}
-
-			bytes_identical += j * Bpp;
-
-			if (j == width)
-			{
-				/* no actual changes in this line */
-				next_pixel = line_end;
-			} else {
-
-				/* adjust line_end to last pixel that changed */
-				for (k = width - 1; k > j; k--)
-				{
-					if (back_start[k] != line_start[k])
-					{
-						line_end = &line_start[k+1];
-						break;
-					}
-				}
-
-				bytes_identical += ((width - 1) - k) * Bpp;
-			}
+			next_pixel = &line_start[start];
+			line_end = &line_start[end];
+			dev_addr += start * BPP;
+			bytes_identical += count * BPP;
 		}
 
 		while (next_pixel < line_end) {
@@ -542,7 +560,7 @@ int image_blit(struct dlfb_data *dev, int x, int y,
 
 		if (dev->backing_buffer)
 			memcpy((char*)back_start, (char*) line_start,
-			       width * Bpp);
+			       width * BPP);
 	}
 
 	if (cmd > dev->buf)
