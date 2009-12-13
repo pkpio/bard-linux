@@ -350,7 +350,7 @@ A single command can transmit a maximum of 256 pixels,
 regardless of the compression ratio (protocol design limit).
 To the hardware, 0 for a size byte means 256
 */
-void dlfb_render_rgb565_hline_rlx(
+static void render_hline(
 	const uint16_t* *pixel_start_ptr,
 	const uint16_t*	const pixel_end,
 	uint32_t *device_address_ptr,
@@ -462,12 +462,15 @@ void dlfb_render_rgb565_hline_rlx(
 int image_blit(struct dlfb_data *dev, int x, int y,
 	       int width, int height, char *data)
 {
-	const int host_pixel_size = 2;
-	const int device_pixel_size = 2;
+	const int Bpp = 2;
 	int i, j, k, ret;
 	char *cmd, *cmd_end;
+	cycles_t start_cycles, end_cycles;
+	int bytes_sent, bytes_identical = 0;
 
 	mutex_lock(&dev->bulk_mutex);
+
+	start_cycles = get_cycles();
 
 	cmd = dev->buf;
 	cmd_end = dev->bufend - BUF_HIGH_WATER_MARK;
@@ -480,69 +483,83 @@ int image_blit(struct dlfb_data *dev, int x, int y,
 	for (i = y; i < y + height ; i++) {
 		const uint16_t *line_start, *line_end, *back_start, *next_pixel;
 		const int line_length = dev->info->fix.line_length * i;
-		uint32_t dev_addr = dev->base16 + line_length +
-			(x * device_pixel_size);
+		uint32_t dev_addr = dev->base16 + line_length +	(x * Bpp);
 
-		line_start = (uint16_t *) (data + line_length +
-					   (x * host_pixel_size));
+		line_start = (uint16_t *) (data + line_length + (x * Bpp));
 		next_pixel = line_start;
 		line_end = &line_start[width+1];
-		back_start = (uint16_t *) (dev->backing_buffer + line_length +
-					   (x * host_pixel_size));
 
-		/* adjust line_start to first pixel that actually changed */
-		for (j = 0; j < width; j++)
-		{
-			if (back_start[j] != line_start[j])
+		if (dev->backing_buffer) {
+
+			back_start = (uint16_t *) (dev->backing_buffer +
+					 line_length + (x * Bpp));
+
+			/* adjust line_start to first pixel actually changed */
+			for (j = 0; j < width; j++)
 			{
-				next_pixel = &next_pixel[j];
-				dev_addr += j * device_pixel_size;
-				break;
-			}
-		}
-
-		if (j == width)
-		{
-			/* no actual changes in this line */
-			next_pixel = line_end;
-
-		} else {
-
-			/* adjust line_end to last pixel that changed */
-			for (k = (width-1); k > j; k--)
-			{
-				if (back_start[k] != line_start[k])
+				if (back_start[j] != line_start[j])
 				{
-					line_end = &line_start[k+1];
+					next_pixel = &next_pixel[j];
+					dev_addr += j * Bpp;
 					break;
 				}
+			}
+
+			bytes_identical += j * Bpp;
+
+			if (j == width)
+			{
+				/* no actual changes in this line */
+				next_pixel = line_end;
+			} else {
+
+				/* adjust line_end to last pixel that changed */
+				for (k = width - 1; k > j; k--)
+				{
+					if (back_start[k] != line_start[k])
+					{
+						line_end = &line_start[k+1];
+						break;
+					}
+				}
+
+				bytes_identical += ((width - 1) - k) * Bpp;
 			}
 		}
 
 		while (next_pixel < line_end) {
 
-			dlfb_render_rgb565_hline_rlx(
-				&next_pixel,
-				line_end,
-				&dev_addr,
-				(uint8_t**) &cmd,
-				(uint8_t*)  cmd_end);
+			render_hline(&next_pixel, line_end, &dev_addr,
+				(uint8_t**) &cmd, (uint8_t*)  cmd_end);
 
 			if (cmd >= cmd_end) {
-				ret = dlfb_bulk_msg(dev, cmd - dev->buf);
+				int len = cmd - dev->buf;
+				ret = dlfb_bulk_msg(dev, len);
+				bytes_sent += len;
 				cmd = dev->buf;
 			}
 		}
 
-		memcpy((char*)back_start, (char*) line_start,
-		       width * host_pixel_size);
+		if (dev->backing_buffer)
+			memcpy((char*)back_start, (char*) line_start,
+			       width * Bpp);
 	}
 
 	if (cmd > dev->buf)
 	{
 		/* Send partial buffer remaining before exiting */
-		ret = dlfb_bulk_msg(dev, cmd - dev->buf);
+		int len = cmd - dev->buf;
+		ret = dlfb_bulk_msg(dev, len);
+		bytes_sent += len;
 	}
+
+	atomic_add(bytes_sent, &dev->bytes_sent);
+	atomic_add(bytes_identical, &dev->bytes_identical);
+	atomic_add(width*height*2, &dev->bytes_rendered);
+	end_cycles = get_cycles();
+	atomic_add(((unsigned int) ((end_cycles - start_cycles)
+		    >> 10)), /* Kcycles */
+		   &dev->cpu_kcycles_used);
 
 	mutex_unlock(&dev->bulk_mutex);
 
