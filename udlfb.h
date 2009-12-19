@@ -1,25 +1,18 @@
 #ifndef UDLFB_H
 #define UDLFB_H
 
-/* as libdlo */
-#define BUF_HIGH_WATER_MARK	1024
-#define BUF_SIZE		(64*1024)
-
 struct dlfb_data {
 	struct usb_device *udev;
-	struct usb_interface *interface;
-	struct urb *tx_urb, *ctrl_urb;
-	struct usb_ctrlrequest dr;
 	struct fb_info *info;
-	char *buf;
-	char *bufend;
+	struct semaphore limit_sem;
+	struct completion write_completion_routine;
+	struct kref kref;
 	char *backing_buffer;
-	struct mutex bulk_mutex;
 	atomic_t fb_count;
+	atomic_t usb_active; /* 0 = update virtual buffer, but no usb traffic */
+	atomic_t lost_pixels; /* 1 = a render op failed. Need screen refresh */
 	char edid[128];
 	int sku_pixel_limit;
-	int screen_size;
-	struct completion done;
 	int base16;
 	int base16d;
 	int base8;
@@ -38,12 +31,6 @@ struct dlfb_data {
 	atomic_t defio_fault_count;
 };
 
-static void dlfb_bulk_callback(struct urb *urb)
-{
-	struct dlfb_data *dev_info = urb->context;
-	complete(&dev_info->done);
-}
-
 static void dlfb_get_edid(struct dlfb_data *dev_info)
 {
 	int i;
@@ -60,24 +47,6 @@ static void dlfb_get_edid(struct dlfb_data *dev_info)
 		dev_info->edid[i] = rbuf[1];
 	}
 
-}
-
-static int dlfb_bulk_msg(struct dlfb_data *dev_info, int len)
-{
-	int ret;
-
-	init_completion(&dev_info->done);
-
-	dev_info->tx_urb->actual_length = 0;
-	dev_info->tx_urb->transfer_buffer_length = len;
-
-	ret = usb_submit_urb(dev_info->tx_urb, GFP_KERNEL);
-	if (!wait_for_completion_timeout(&dev_info->done, 1000)) {
-		usb_kill_urb(dev_info->tx_urb);
-		printk("usb timeout !!!\n");
-	}
-
-	return dev_info->tx_urb->actual_length;
 }
 
 #define dlfb_set_register insert_command

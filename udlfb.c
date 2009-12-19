@@ -22,7 +22,6 @@
 #include <linux/uaccess.h>
 #include <linux/mm.h>
 #include <linux/fb.h>
-#include <linux/mutex.h>
 #include <linux/vmalloc.h>
 
 #include "udlfb.h"
@@ -42,6 +41,17 @@ static struct fb_fix_screeninfo dlfb_fix = {
 #define NR_USB_REQUEST_I2C_SUB_IO 0x02
 #define NR_USB_REQUEST_CHANNEL 0x12
 
+/* as per usb-skeleton. Can we get raw page and avoid overhead? */
+#define BULK_SIZE 512
+#define MAX_TRANSFER (PAGE_SIZE - BULK_SIZE)
+#define WRITES_IN_FLIGHT (32)
+
+/* dlfb-specific usb helper functions */
+static int dlfb_sync_bulk_msg(struct dlfb_data *dev, void *buf, int len);
+static void dlfb_render_urb_completion(struct urb *urb);
+static struct urb* dlfb_alloc_render_urb(struct dlfb_data *dev);
+static int dlfb_submit_render_urb(struct urb * urb, size_t len);
+
 /*
  * Inserts a specific DisplayLink controller command into the provided
  * buffer.
@@ -54,6 +64,7 @@ static char *insert_command(char *buf, u8 reg, u8 val)
 	*buf++ = val;
 	return buf;
 }
+#define BYTES_PER_COMMAND		(4)
 
 static char *insert_vidreg_lock(char *buf)
 {
@@ -211,7 +222,12 @@ static int dlfb_set_video_mode(struct dlfb_data *dev,
 	int retval = 0;
 	int writesize;
 
-	buf = dev->buf;
+	if (!atomic_read(&dev->usb_active))
+		return -EPERM;
+
+	buf = kzalloc(BULK_SIZE, GFP_KERNEL);
+	if (!buf)
+		return -ENOMEM;
 
 	/*
 	* This first section has to do with setting the base address on the
@@ -231,24 +247,15 @@ static int dlfb_set_video_mode(struct dlfb_data *dev,
 
 	writesize = wrptr - buf;
 
-	mutex_lock(&dev->bulk_mutex);
-	if (!dev->interface) {		/* disconnect() was called */
-		mutex_unlock(&dev->bulk_mutex);
-		retval = -ENODEV;
-		goto error;
-	}
-
-	retval = dlfb_bulk_msg(dev, writesize);
-	mutex_unlock(&dev->bulk_mutex);
+	retval = dlfb_sync_bulk_msg(dev, buf, writesize);
 	if (retval) {
 		dev_err(&dev->udev->dev, "Problem %d with submit write bulk.\n",
 					retval);
 		goto error;
 	}
 
-	return 0;
-
 error:
+	kfree(buf);
 	return retval;
 }
 
@@ -323,12 +330,13 @@ MODULE_DEVICE_TABLE(usb, id_table);
 
 static struct usb_driver dlfb_driver;
 
-#define BPP 2
+#define BPP                     2
 #define MAX_CMD_PIXELS		255
 #define MIN_RLX_PIX_BYTES       4
 #define MIN_RLX_CMD_BYTES	(7 + MIN_RLX_PIX_BYTES)
 
 #define MIN(a,b) ((a)>(b)?(b):(a))
+
 
 /*
  * Trims identical pixels from front and back of line
@@ -502,40 +510,49 @@ int image_blit(struct dlfb_data *dev, int x, int y,
 	       int width, int height, char *data)
 {
 	int i, ret;
-	char *cmd, *cmd_end;
+	char *cmd, *cmd_start, *cmd_end;
 	cycles_t start_cycles, end_cycles;
 	int bytes_sent = 0;
 	int bytes_identical = 0;
-
-	mutex_lock(&dev->bulk_mutex);
+	struct urb *urb;
 
 	start_cycles = get_cycles();
-
-	cmd = dev->buf;
-	cmd_end = dev->bufend - BUF_HIGH_WATER_MARK;
 
 	if ((width <= 0) ||
 	    (x + width > dev->info->var.xres) ||
 	    (y + height > dev->info->var.yres))
 		return -EINVAL;
 
+	if (!atomic_read(&dev->usb_active))
+		return 0;
+
+	urb = dlfb_alloc_render_urb(dev);
+	if (!urb)
+		return 0;
+
+	/* cmd_end points past end of buffer */
+	cmd = urb->transfer_buffer;
+	cmd_start = cmd;
+	cmd_end = &cmd[urb->transfer_buffer_length];
+
 	for (i = y; i < y + height ; i++) {
-		const uint16_t *line_start, *line_end, *next_pixel, *back_start;
+		const uint16_t *line_start, *line_end, *next_pixel;
 		const int line_length = dev->info->fix.line_length * i;
 		const int byte_offset = line_length + (x * BPP);
 		uint32_t dev_addr = dev->base16 + byte_offset;
+		uint16_t *back_start = 0;
 
 		line_start = (uint16_t *) (data + byte_offset);
 		next_pixel = line_start;
 		line_end = &line_start[width+1];
-
-		back_start = (uint16_t *) (dev->backing_buffer + byte_offset);
 
 		if (dev->backing_buffer) {
 			int start = 0;
 			int end = 0;
 			int count;
 
+			back_start = (uint16_t *) (dev->backing_buffer +
+						byte_offset);
 			count = trim_hline(line_start, back_start,
 					   width, &start, &end);
 
@@ -551,10 +568,15 @@ int image_blit(struct dlfb_data *dev, int x, int y,
 				(uint8_t**) &cmd, (uint8_t*)  cmd_end);
 
 			if (cmd >= cmd_end) {
-				int len = cmd - dev->buf;
-				ret = dlfb_bulk_msg(dev, len);
+				int len = cmd - cmd_start;
+				dlfb_submit_render_urb(urb, len);
 				bytes_sent += len;
-				cmd = dev->buf;
+				urb = dlfb_alloc_render_urb(dev);
+				if (!urb)
+					return 0; /* lost_pixels is set */
+				cmd = urb->transfer_buffer;
+				cmd_start = cmd;
+				cmd_end = &cmd[urb->transfer_buffer_length];
 			}
 		}
 
@@ -563,11 +585,11 @@ int image_blit(struct dlfb_data *dev, int x, int y,
 			       width * BPP);
 	}
 
-	if (cmd > dev->buf)
+	if (cmd > cmd_start)
 	{
 		/* Send partial buffer remaining before exiting */
-		int len = cmd - dev->buf;
-		ret = dlfb_bulk_msg(dev, len);
+		int len = cmd - cmd_start;
+		ret = dlfb_submit_render_urb(urb, len);
 		bytes_sent += len;
 	}
 
@@ -579,10 +601,9 @@ int image_blit(struct dlfb_data *dev, int x, int y,
 		    >> 10)), /* Kcycles */
 		   &dev->cpu_kcycles_used);
 
-	mutex_unlock(&dev->bulk_mutex);
-
 	return 0;
 }
+
 
 static int
 draw_rect(struct dlfb_data *dev_info, int x, int y, int width, int height,
@@ -595,20 +616,26 @@ draw_rect(struct dlfb_data *dev_info, int x, int y, int width, int height,
 	    (((((red) & 0xF8) | ((green) >> 5)) & 0xFF) << 8) +
 	    (((((green) & 0x1C) << 3) | ((blue) >> 3)) & 0xFF);
 	int rem = width;
-
 	char *bufptr;
+	int len;
 
-	if (x + width > dev_info->info->var.xres)
+	if ((x + width > dev_info->info->var.xres) ||
+	    (y + height > dev_info->info->var.yres) ||
+	    (width == 0) || (height == 0))
 		return -EINVAL;
 
-	if (y + height > dev_info->info->var.yres)
-		return -EINVAL;
-
-	mutex_lock(&dev_info->bulk_mutex);
+	if (!atomic_read(&dev_info->usb_active))
+		return 0;
 
 	base = dev_info->base16 + (dev_info->info->var.xres * 2 * y) + (x * 2);
 
-	bufptr = dev_info->buf;
+	/* For solid color fills, for every 255 pixels, 9 bytes go over usb */
+	len = ((width * height / 255) + 1)  * 9;
+	bufptr = kmalloc(len, GFP_KERNEL);
+	if (!bufptr) {
+		atomic_set(&dev_info->lost_pixels, 1);
+		return 0;
+	}
 
 	for (i = y; i < y + height; i++) {
 
@@ -623,21 +650,9 @@ draw_rect(struct dlfb_data *dev_info, int x, int y, int width, int height,
 			}
 		}
 
-		if (dev_info->bufend - bufptr < BUF_HIGH_WATER_MARK) {
-			ret = dlfb_bulk_msg(dev_info, bufptr - dev_info->buf);
-			bufptr = dev_info->buf;
-		}
-
 		rem = width;
 
 		while (rem) {
-
-			if (dev_info->bufend - bufptr < BUF_HIGH_WATER_MARK) {
-				ret =
-				    dlfb_bulk_msg(dev_info,
-						  bufptr - dev_info->buf);
-				bufptr = dev_info->buf;
-			}
 
 			*bufptr++ = 0xAF;
 			*bufptr++ = 0x69;
@@ -667,117 +682,11 @@ draw_rect(struct dlfb_data *dev_info, int x, int y, int width, int height,
 
 	}
 
-	if (bufptr > dev_info->buf)
-		ret = dlfb_bulk_msg(dev_info, bufptr - dev_info->buf);
+	ret = dlfb_sync_bulk_msg(dev_info, bufptr, len);
 
-	mutex_unlock(&dev_info->bulk_mutex);
+	kfree(bufptr);
 
-	return 1;
-}
-
-static void swapfb(struct dlfb_data *dev_info)
-{
-
-	int tmpbase;
-	char *bufptr;
-
-	mutex_lock(&dev_info->bulk_mutex);
-
-	tmpbase = dev_info->base16;
-
-	dev_info->base16 = dev_info->base16d;
-	dev_info->base16d = tmpbase;
-
-	bufptr = dev_info->buf;
-
-	bufptr = dlfb_set_register(bufptr, 0xFF, 0x00);
-
-	// set addresses
-	bufptr =
-	    dlfb_set_register(bufptr, 0x20, (char)(dev_info->base16 >> 16));
-	bufptr = dlfb_set_register(bufptr, 0x21, (char)(dev_info->base16 >> 8));
-	bufptr = dlfb_set_register(bufptr, 0x22, (char)(dev_info->base16));
-
-	bufptr = dlfb_set_register(bufptr, 0xFF, 0x00);
-
-	dlfb_bulk_msg(dev_info, bufptr - dev_info->buf);
-
-	mutex_unlock(&dev_info->bulk_mutex);
-}
-
-static int copyfb(struct dlfb_data *dev_info)
-{
-	int base;
-	int source;
-	int rem;
-	int i, ret;
-
-	char *bufptr;
-
-	base = dev_info->base16d;
-
-	mutex_lock(&dev_info->bulk_mutex);
-
-	source = dev_info->base16;
-
-	bufptr = dev_info->buf;
-
-	for (i = 0; i < dev_info->info->var.yres; i++) {
-
-		if (dev_info->bufend - bufptr < BUF_HIGH_WATER_MARK) {
-			ret = dlfb_bulk_msg(dev_info, bufptr - dev_info->buf);
-			bufptr = dev_info->buf;
-		}
-
-		rem = dev_info->info->var.xres;
-
-		while (rem) {
-
-			if (dev_info->bufend - bufptr < BUF_HIGH_WATER_MARK) {
-				ret =
-				    dlfb_bulk_msg(dev_info,
-						  bufptr - dev_info->buf);
-				bufptr = dev_info->buf;
-
-			}
-
-			*bufptr++ = 0xAF;
-			*bufptr++ = 0x6A;
-
-			*bufptr++ = (char)(base >> 16);
-			*bufptr++ = (char)(base >> 8);
-			*bufptr++ = (char)(base);
-
-			if (rem > 255) {
-				*bufptr++ = 255;
-				*bufptr++ = (char)(source >> 16);
-				*bufptr++ = (char)(source >> 8);
-				*bufptr++ = (char)(source);
-
-				rem -= 255;
-				base += 255 * 2;
-				source += 255 * 2;
-
-			} else {
-				*bufptr++ = rem;
-				*bufptr++ = (char)(source >> 16);
-				*bufptr++ = (char)(source >> 8);
-				*bufptr++ = (char)(source);
-
-				base += rem * 2;
-				source += rem * 2;
-				rem = 0;
-			}
-		}
-	}
-
-	if (bufptr > dev_info->buf)
-		ret = dlfb_bulk_msg(dev_info, bufptr - dev_info->buf);
-
-	mutex_unlock(&dev_info->bulk_mutex);
-
-	return 1;
-
+	return ret;
 }
 
 static int
@@ -788,43 +697,37 @@ copyarea(struct dlfb_data *dev_info, int dx, int dy, int sx, int sy,
 	int source;
 	int rem;
 	int i, ret;
-
+	int len;
 	char *bufptr;
 
-	if (dx + width > dev_info->info->var.xres)
+	if ((dx + width > dev_info->info->var.xres) ||
+	    (dy + height > dev_info->info->var.yres) ||
+	    (width == 0) || (height == 0))
 		return -EINVAL;
 
-	if (dy + height > dev_info->info->var.yres)
-		return -EINVAL;
-
-	mutex_lock(&dev_info->bulk_mutex);
+	if (!atomic_read(&dev_info->usb_active))
+		return 0;
 
 	base =
 	    dev_info->base16 + (dev_info->info->var.xres * 2 * dy) + (dx * 2);
 	source = (dev_info->info->var.xres * 2 * sy) + (sx * 2);
 
-	bufptr = dev_info->buf;
+	/* For copies, for every 255 pixels, 9 bytes go over usb */
+	len = ((width * height / 255) + 1)  * 9;
+	bufptr = kmalloc(len, GFP_KERNEL);
+	if (!bufptr) {
+		atomic_set(&dev_info->lost_pixels, 1);
+		return 0;
+	}
 
 	for (i = sy; i < sy + height; i++) {
 
 		memcpy(dev_info->backing_buffer + base - dev_info->base16,
 		       dev_info->backing_buffer + source, width * 2);
 
-		if (dev_info->bufend - bufptr < BUF_HIGH_WATER_MARK) {
-			ret = dlfb_bulk_msg(dev_info, bufptr - dev_info->buf);
-			bufptr = dev_info->buf;
-		}
-
 		rem = width;
 
 		while (rem) {
-
-			if (dev_info->bufend - bufptr < BUF_HIGH_WATER_MARK) {
-				ret =
-				    dlfb_bulk_msg(dev_info,
-						  bufptr - dev_info->buf);
-				bufptr = dev_info->buf;
-			}
 
 			*bufptr++ = 0xAF;
 			*bufptr++ = 0x6A;
@@ -859,18 +762,19 @@ copyarea(struct dlfb_data *dev_info, int dx, int dy, int sx, int sy,
 		source += (dev_info->info->var.xres * 2) - (width * 2);
 	}
 
-	if (bufptr > dev_info->buf)
-		ret = dlfb_bulk_msg(dev_info, bufptr - dev_info->buf);
+	ret = dlfb_sync_bulk_msg(dev_info, bufptr, len);
 
-	mutex_unlock(&dev_info->bulk_mutex);
+	kfree(bufptr);
 
-	return 1;
+	return ret;
 }
 
 static void dlfb_copyarea(struct fb_info *info, const struct fb_copyarea *area)
 {
 
 	struct dlfb_data *dev = info->par;
+
+	sys_copyarea(info, area);
 
 	copyarea(dev, area->dx, area->dy, area->sx, area->sy, area->width,
 		 area->height);
@@ -900,6 +804,8 @@ static void dlfb_fillrect(struct fb_info *info,
 	unsigned char red, green, blue;
 	struct dlfb_data *dev = info->par;
 
+	sys_fillrect(info, region);
+
 	memcpy(&red, &region->color, 1);
 	memcpy(&green, &region->color + 1, 1);
 	memcpy(&blue, &region->color + 2, 1);
@@ -916,6 +822,9 @@ static int dlfb_ioctl(struct fb_info *info, unsigned int cmd, unsigned long arg)
 
 	struct dlfb_data *dev_info = info->par;
 	struct dloarea *area = NULL;
+
+	if (!atomic_read(&dev_info->usb_active))
+		return 0;
 
 	if (cmd == 0xAD) {
 		char *edid = (char *)arg;
@@ -947,12 +856,6 @@ static int dlfb_ioctl(struct fb_info *info, unsigned int cmd, unsigned long arg)
 		image_blit(dev_info, area->x, area->y, area->w, area->h,
 			   info->screen_base);
 		atomic_inc(&dev_info->damage_count);
-	}
-	if (cmd == 0xAC) {
-		copyfb(dev_info);
-		image_blit(dev_info, area->x, area->y, area->w, area->h,
-			   info->screen_base);
-		swapfb(dev_info);
 	} else if (cmd == 0xAB) {
 
 		if (area->x2 < 0)
@@ -1010,10 +913,51 @@ static int dlfb_open(struct fb_info *info, int user)
 static int dlfb_release(struct fb_info *info, int user)
 {
 	struct dlfb_data *dev_info = info->par;
-
+/*
 	image_blit(dev_info, 0, 0, info->var.xres, info->var.yres,
-		   info->screen_base);
+		   info->screen_base); */
 	return 0;
+}
+
+/*
+ * Called when all client interfaces to start transactions have been disabled,
+ * and all references to our device instance (dlfb_data) are released.
+ * Every transaction must have a reference, so we know are fully spun down
+ */
+static void dlfb_delete(struct kref *kref)
+{
+	struct dlfb_data *dev = container_of(kref, struct dlfb_data, kref);
+
+	if (dev->backing_buffer) {
+		vfree(dev->backing_buffer);
+	}
+
+	kfree(dev);
+}
+
+/*
+ * Called by fbdev as last part of unregister_framebuffer() process
+ * No new clients can open connections. Deallocate everything fb_info.
+ */
+static void dlfb_destroy(struct fb_info *info)
+{
+	struct dlfb_data *dev = info->par;
+
+	/* TODO: fb_deferred_io_cleanup(info); */
+
+	if (info->cmap.len != 0)
+		fb_dealloc_cmap(&info->cmap);
+	if (info->monspecs.modedb)
+		fb_destroy_modedb(info->monspecs.modedb);
+	if (info->screen_base)
+		vfree((void __force *)info->screen_base);
+
+	fb_destroy_modelist(&info->modelist);
+
+	framebuffer_release(info);
+
+	/* ref taken before register_framebuffer() for dlfb_data clients */
+	kref_put(&dev->kref, dlfb_delete);
 }
 
 /*
@@ -1047,18 +991,27 @@ static int dlfb_check_var(struct fb_var_screeninfo *var, struct fb_info *info)
 	return 0;
 }
 
-static int dlfb_set_par(struct fb_info *info) {
+static int dlfb_set_par(struct fb_info *info)
+{
+	struct dlfb_data *dev = info->par;
 
-	return dlfb_set_video_mode(info->par, &info->var);
+	return dlfb_set_video_mode(dev, &info->var);
 }
 
 
 static int dlfb_blank(int blank_mode, struct fb_info *info)
 {
-	struct dlfb_data *dev_info = info->par;
-	char *bufptr = dev_info->buf;
+	const int commands = 4;
+	struct dlfb_data *dev = info->par;
+	char *bufptr = kmalloc(commands * BYTES_PER_COMMAND, GFP_KERNEL);
+
+	if (!atomic_read(&dev->usb_active))
+		return 0;
 
 	bufptr = dlfb_set_register(bufptr, 0xFF, 0x00);
+	if (!bufptr)
+		return 0;
+
 	if (blank_mode != FB_BLANK_UNBLANK) {
 		bufptr = dlfb_set_register(bufptr, 0x1F, 0x01);
 	} else {
@@ -1066,12 +1019,13 @@ static int dlfb_blank(int blank_mode, struct fb_info *info)
 	}
 	bufptr = dlfb_set_register(bufptr, 0xFF, 0xFF);
 
-	dlfb_bulk_msg(dev_info, bufptr - dev_info->buf);
+	dlfb_sync_bulk_msg(dev, bufptr, commands * BYTES_PER_COMMAND);
 
 	return 0;
 }
 
 static struct fb_ops dlfb_ops = {
+	.owner = THIS_MODULE,
 	.fb_setcolreg = dlfb_setcolreg,
 	.fb_fillrect = dlfb_fillrect,
 	.fb_copyarea = dlfb_copyarea,
@@ -1083,7 +1037,6 @@ static struct fb_ops dlfb_ops = {
 	.fb_blank = dlfb_blank,
 	.fb_check_var = dlfb_check_var,
 	.fb_set_par = dlfb_set_par,
-
 };
 
 
@@ -1232,7 +1185,6 @@ static void dlfb_parse_edid(struct dlfb_data *dev,
 static int dlfb_probe(struct usb_interface *interface,
 			const struct usb_device_id *id)
 {
-	struct device *mydev;
 	struct usb_device *usbdev;
 	struct dlfb_data *dev;
 	struct fb_info *info;
@@ -1244,43 +1196,35 @@ static int dlfb_probe(struct usb_interface *interface,
 	struct fb_bitfield red = { 11, 5, 0 };
 	struct fb_bitfield green = { 5, 6, 0 };
 	struct fb_bitfield blue = { 0, 5, 0 };
+	int registered = 0;
 
-	usbdev = usb_get_dev(interface_to_usbdev(interface));
-	mydev = &usbdev->dev;
+	/* usb initialization */
+
+	usbdev = interface_to_usbdev(interface);
+
+	err("dlfb_probe: DisplayLink device PID %x\n", id->idProduct);
 
 	dev = kzalloc(sizeof(*dev), GFP_KERNEL);
 	if (dev == NULL) {
-		dev_err(mydev, "failed alloc of dev struct\n");
-		goto err_devalloc;
+		err("dlfb_probe: failed alloc of dev struct\n");
+		goto error;
 	}
 
-	mutex_init(&dev->bulk_mutex);
+	/* we need to wait for both usb and fbdev to spin down on disconnect */
+	kref_init(&dev->kref); /* matching kref_put in usb .disconnect fn */
+	kref_get(&dev->kref); /* matching kref_put in .fb_destroy function*/
+
+	sema_init(&dev->limit_sem, WRITES_IN_FLIGHT);
+
 	dev->udev = usbdev;
-	dev->interface = interface;
 	usb_set_intfdata(interface, dev);
 
-	dev_info(mydev, "dlfb_probe: setting up DisplayLink device\n");
-
-	/*
-	 * TODO: replace single 64K buffer with buffer list
-	 * and async dispatch
-	 */
-	dev->buf = kmalloc(BUF_SIZE, GFP_KERNEL);
-	if (dev->buf == NULL) {
-		dev_err(mydev, "unable to allocate memory for dlfb commands\n");
-		goto err_usballoc;
-	}
-	dev->bufend = dev->buf + BUF_SIZE;
-
-	dev->tx_urb = usb_alloc_urb(0, GFP_KERNEL);
-	usb_fill_bulk_urb(dev->tx_urb, dev->udev,
-			  usb_sndbulkpipe(dev->udev, 1), dev->buf, 0,
-			  dlfb_bulk_callback, dev);
+	/* We don't register a new USB class. Our client interface is fbdev */
 
 	/* allocates framebuffer driver structure, not framebuffer memory */
-	info = framebuffer_alloc(0, mydev);
+	info = framebuffer_alloc(0, &usbdev->dev);
 	if (!info)
-		goto err_fballoc;
+		goto error;
 
 	dev->info = info;
 	info->par = dev;
@@ -1307,10 +1251,11 @@ static int dlfb_probe(struct usb_interface *interface,
 	 * The big chunk of system memory we use as a virtual framebuffer.
 	 * Pages don't need to be set RESERVED (non-swap) immediately on 2.6
 	 * remap_pfn_page() syscall in our mmap and/or defio will handle.
+	 * TODO: Handle fbcon cursor code calling in interrupt context
 	 */
 	videomemory = vmalloc(videomemorysize);
 	if (!videomemory)
-		goto err_vidmem;
+		goto error;
 	memset(videomemory, 0, videomemorysize);
 
 	info->screen_base = videomemory;
@@ -1328,7 +1273,7 @@ static int dlfb_probe(struct usb_interface *interface,
 	 */
 	dev->backing_buffer = vmalloc(videomemorysize);
 	if (!dev->backing_buffer)
-		dev_warn(mydev, "udlfb: No backing buffer allocated!\n");
+		dev_warn(&interface->dev, "No backing buffer allocated!\n");
 
 	info->fbops = &dlfb_ops;
 
@@ -1347,9 +1292,13 @@ static int dlfb_probe(struct usb_interface *interface,
 
 	retval = fb_alloc_cmap(&info->cmap, 256, 0);
 	if (retval < 0) {
-		dev_err(mydev, "Failed to allocate colormap\n");
-		goto err_cmap;
+		dev_err(&interface->dev, "Failed to allocate colormap\n");
+		goto error;
 	}
+
+	/* ready to begin using device */
+
+	atomic_set(&dev->usb_active, 1);
 
 	dlfb_select_std_channel(dev);
 	dlfb_set_video_mode(dev, var);
@@ -1357,7 +1306,8 @@ static int dlfb_probe(struct usb_interface *interface,
 
 	retval = register_framebuffer(info);
 	if (retval < 0)
-		goto err_regfb;
+		goto error;
+	registered = 1;
 
 	for (i = 0; i < ARRAY_SIZE(fb_device_attrs); i++) {
 		device_create_file(info->dev, &fb_device_attrs[i]);
@@ -1367,29 +1317,24 @@ static int dlfb_probe(struct usb_interface *interface,
 	draw_rect(dev, 0, 0, dev->info->var.xres,
 		  dev->info->var.yres, 0x30, 0xff, 0x30);
 
-	dev_err(mydev, "DisplayLink USB device %d now attached, "
+	dev_err(&interface->dev, "DisplayLink USB device %d now attached, "
 			"using %dK of memory\n", info->node,
 		 ((dev->backing_buffer) ?
 		  videomemorysize * 2 : videomemorysize) >> 10);
 	return 0;
 
-err_regfb:
-	fb_dealloc_cmap(&info->cmap);
-err_cmap:
-	/* TODO: fb_deferred_io_cleanup(info); */
-	vfree(videomemory);
-err_vidmem:
-	if (info->monspecs.modedb)
-		fb_destroy_modedb(info->monspecs.modedb);
-	fb_destroy_modelist(&info->modelist);
-	framebuffer_release(info);
-err_fballoc:
-	kfree(dev->buf);
-err_usballoc:
-	usb_set_intfdata(interface, NULL);
-	usb_put_dev(dev->udev);
-	kfree(dev);
-err_devalloc:
+error:
+	if (dev) {
+		if (registered) {
+			unregister_framebuffer(info);
+			dlfb_destroy(info);
+		} else
+			kref_put(&dev->kref, dlfb_delete);
+		kref_put(&dev->kref, dlfb_delete); /* last ref from kref_init */
+
+		/* dev has been deallocated. Do not dereference */
+	}
+
 	return retval;
 }
 
@@ -1397,38 +1342,33 @@ static void dlfb_disconnect(struct usb_interface *interface)
 {
 	struct dlfb_data *dev;
 	struct fb_info *info;
+	int i;
 
 	dev = usb_get_intfdata(interface);
-	usb_set_intfdata(interface, NULL);
-	usb_put_dev(dev->udev);
-
-	/*
-	 * TODO: since, upon usb disconnect(), usb will cancel in-flight urbs
-	 * and error out any new ones, look at eliminating need for mutex
-	 */
-	mutex_lock(&dev->bulk_mutex);
-	dev->interface = NULL;
 	info = dev->info;
-	mutex_unlock(&dev->bulk_mutex);
+
+	/* when non-active we'll update virtual framebuffer, but no new urbs */
+	atomic_set(&dev->usb_active, 0);
+
+	usb_set_intfdata(interface, NULL);
+
+	for (i = 0; i < ARRAY_SIZE(fb_device_attrs); i++) {
+		device_remove_file(info->dev, &fb_device_attrs[i]);
+	}
 
 	if (info) {
 		dev_info(&interface->dev, "Detaching DisplayLink device %d.\n",
 						info->node);
 		unregister_framebuffer(info);
-		fb_dealloc_cmap(&info->cmap);
-		if (info->monspecs.modedb)
-			fb_destroy_modedb(info->monspecs.modedb);
-		fb_destroy_modelist(&info->modelist);
-		/* TODO: fb_deferred_io_cleanup(info); */
-		fb_dealloc_cmap(&info->cmap);
-		vfree((void __force *)info->screen_base);
-		framebuffer_release(info);
+		dlfb_destroy(info);
 	}
 
-	if (dev->backing_buffer)
-		vfree(dev->backing_buffer);
+	/* release reference taken by kref_init in probe() */
+	kref_put(&dev->kref, dlfb_delete);
 
-	kfree(dev);
+	/* consider dlfb_data freed. It is or will be when last urb completes */
+
+	return;
 }
 
 static struct usb_driver dlfb_driver = {
@@ -1458,6 +1398,95 @@ static void __exit dlfb_exit(void)
 
 module_init(dlfb_init);
 module_exit(dlfb_exit);
+
+static int dlfb_sync_bulk_msg(struct dlfb_data *dev, void *buf, int len)
+{
+	int written = 0;
+
+	return usb_bulk_msg(dev->udev, usb_sndbulkpipe(dev->udev, 1),
+			      buf, len, &written, 0);
+}
+
+static void dlfb_render_urb_completion(struct urb *urb)
+{
+	struct dlfb_data *dev = urb->context;
+
+	/* sync/async unlink faults aren't errors */
+	if (urb->status) {
+		if (!(urb->status == -ENOENT ||
+		    urb->status == -ECONNRESET ||
+		    urb->status == -ESHUTDOWN)) {
+			err("%s - nonzero write bulk status received: %d",
+				__func__, urb->status);
+			atomic_set(&dev->lost_pixels, 1);
+		}
+	}
+
+	/* free up our allocated buffer */
+	usb_buffer_free(urb->dev, MAX_TRANSFER,
+			urb->transfer_buffer, urb->transfer_dma);
+
+	up(&dev->limit_sem);
+
+	kref_put(&dev->kref, dlfb_delete);
+}
+
+/*
+ * May fail.  If so, dev->lost_pixels is set, needs future whole screen refresh
+ */
+static struct urb* dlfb_alloc_render_urb(struct dlfb_data *dev)
+{
+	struct urb *urb = NULL;
+	char * buf;
+
+	/* We tend to flood the bus.  Will frequently be waiting here */
+	if (down_interruptible(&dev->limit_sem))
+		goto error;
+
+	urb = usb_alloc_urb(0, GFP_KERNEL);
+	if (!urb)
+		goto error;
+
+	buf = usb_buffer_alloc(dev->udev, MAX_TRANSFER, GFP_KERNEL,
+					&urb->transfer_dma);
+	if (!buf)
+	{
+		usb_free_urb(urb);
+		goto error;
+	}
+
+	/* urb->transfer_buffer_length set to actual before submit*/
+	usb_fill_bulk_urb(urb, dev->udev, usb_sndbulkpipe(dev->udev, 1),
+		buf, MAX_TRANSFER, dlfb_render_urb_completion, dev);
+	urb->transfer_flags |= URB_NO_TRANSFER_DMA_MAP;
+
+	/*
+	 * We are/must be holding a reference for the client interface
+	 * that allowed this rendering operation to be called, which lets
+	 * us get this additional one, released in the completion routine
+	 */
+	kref_get(&dev->kref);
+
+	return urb;
+
+error:
+	atomic_set(&dev->lost_pixels, 1);
+	return NULL;
+}
+
+static int dlfb_submit_render_urb(struct urb * urb, size_t len)
+{
+	int ret;
+
+	urb->transfer_buffer_length = len; /* set to actual payload len */
+	ret = usb_submit_urb(urb, GFP_KERNEL);
+	if (ret)
+		dlfb_render_urb_completion(urb); /* because no one else will */
+
+	usb_free_urb(urb);
+
+	return ret;
+}
 
 MODULE_AUTHOR("Roberto De Ioris <roberto@unbit.it>, "
 	      "Jaya Kumar <jayakumar.lkml@gmail.com>");
