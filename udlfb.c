@@ -614,7 +614,7 @@ draw_rect(struct dlfb_data *dev_info, int x, int y, int width, int height,
 	    (((((red) & 0xF8) | ((green) >> 5)) & 0xFF) << 8) +
 	    (((((green) & 0x1C) << 3) | ((blue) >> 3)) & 0xFF);
 	int rem = width;
-	char *bufptr;
+	char *bufptr, *buf;
 	int len;
 
 	if ((x + width > dev_info->info->var.xres) ||
@@ -629,11 +629,12 @@ draw_rect(struct dlfb_data *dev_info, int x, int y, int width, int height,
 
 	/* For solid color fills, for every 255 pixels, 9 bytes go over usb */
 	len = ((width * height / 255) + 1)  * 9;
-	bufptr = kmalloc(len, GFP_KERNEL);
-	if (!bufptr) {
+	buf = kmalloc(len, GFP_KERNEL);
+	if (!buf) {
 		atomic_set(&dev_info->lost_pixels, 1);
 		return 0;
 	}
+	bufptr = buf;
 
 	for (i = y; i < y + height; i++) {
 
@@ -682,7 +683,7 @@ draw_rect(struct dlfb_data *dev_info, int x, int y, int width, int height,
 
 	ret = dlfb_sync_bulk_msg(dev_info, bufptr, len);
 
-	kfree(bufptr);
+	kfree(buf);
 
 	return ret;
 }
@@ -696,7 +697,7 @@ copyarea(struct dlfb_data *dev_info, int dx, int dy, int sx, int sy,
 	int rem;
 	int i, ret;
 	int len;
-	char *bufptr;
+	char *bufptr, *buf;
 
 	if ((dx + width > dev_info->info->var.xres) ||
 	    (dy + height > dev_info->info->var.yres) ||
@@ -712,11 +713,12 @@ copyarea(struct dlfb_data *dev_info, int dx, int dy, int sx, int sy,
 
 	/* For copies, for every 255 pixels, 9 bytes go over usb */
 	len = ((width * height / 255) + 1)  * 9;
-	bufptr = kmalloc(len, GFP_KERNEL);
-	if (!bufptr) {
+	buf = kmalloc(len, GFP_KERNEL);
+	if (!buf) {
 		atomic_set(&dev_info->lost_pixels, 1);
 		return 0;
 	}
+	bufptr = buf;
 
 	for (i = sy; i < sy + height; i++) {
 
@@ -762,7 +764,7 @@ copyarea(struct dlfb_data *dev_info, int dx, int dy, int sx, int sy,
 
 	ret = dlfb_sync_bulk_msg(dev_info, bufptr, len);
 
-	kfree(bufptr);
+	kfree(buf);
 
 	return ret;
 }
@@ -1001,14 +1003,17 @@ static int dlfb_blank(int blank_mode, struct fb_info *info)
 {
 	const int commands = 4;
 	struct dlfb_data *dev = info->par;
-	char *bufptr = kmalloc(commands * BYTES_PER_COMMAND, GFP_KERNEL);
+	char *bufptr, *buf;
+
+	buf = kmalloc(commands * BYTES_PER_COMMAND, GFP_KERNEL);
+	if (!buf)
+		return 0;
+	bufptr = buf;
 
 	if (!atomic_read(&dev->usb_active))
 		return 0;
 
 	bufptr = dlfb_set_register(bufptr, 0xFF, 0x00);
-	if (!bufptr)
-		return 0;
 
 	if (blank_mode != FB_BLANK_UNBLANK) {
 		bufptr = dlfb_set_register(bufptr, 0x1F, 0x01);
@@ -1018,6 +1023,8 @@ static int dlfb_blank(int blank_mode, struct fb_info *info)
 	bufptr = dlfb_set_register(bufptr, 0xFF, 0xFF);
 
 	dlfb_sync_bulk_msg(dev, bufptr, commands * BYTES_PER_COMMAND);
+
+	kfree(buf);
 
 	return 0;
 }
