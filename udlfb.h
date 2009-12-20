@@ -1,11 +1,25 @@
 #ifndef UDLFB_H
 #define UDLFB_H
 
+struct urb_node {
+	struct list_head entry;
+	struct dlfb_data *dev;
+	struct urb *urb;
+};
+
+struct urb_list {
+	struct list_head list;
+	spinlock_t lock;
+	struct semaphore limit_sem;
+	int available;
+	int count;
+	size_t size;
+};
+
 struct dlfb_data {
 	struct usb_device *udev;
 	struct fb_info *info;
-	struct semaphore limit_sem;
-	struct completion write_completion_routine;
+	struct urb_list urbs;
 	struct kref kref;
 	char *backing_buffer;
 	atomic_t fb_count;
@@ -14,9 +28,7 @@ struct dlfb_data {
 	char edid[128];
 	int sku_pixel_limit;
 	int base16;
-	int base16d;
 	int base8;
-	int base8d;
 	u32 pseudo_palette[256];
 	/* blit-only rendering path metrics, exposed through sysfs */
 	atomic_t bytes_rendered; /* raw pixel-bytes driver asked to render */

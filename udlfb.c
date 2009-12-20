@@ -3,6 +3,7 @@
  *
  * Copyright (C) 2009 Roberto De Ioris <roberto@unbit.it>
  * Copyright (C) 2009 Jaya Kumar <jayakumar.lkml@gmail.com>
+ * Copyright (C) 2009 Bernie Thompson <bernie@plugable.com>
  *
  * This file is subject to the terms and conditions of the GNU General Public
  * License v2. See the file COPYING in the main directory of this archive for
@@ -26,10 +27,8 @@
 
 #include "udlfb.h"
 
-#define DRIVER_VERSION "DisplayLink Framebuffer Driver 0.4.1"
-
 static struct fb_fix_screeninfo dlfb_fix = {
-	.id =           "displaylinkfb",
+	.id =           "udlfb",
 	.type =         FB_TYPE_PACKED_PIXELS,
 	.visual =       FB_VISUAL_TRUECOLOR,
 	.xpanstep =     0,
@@ -43,14 +42,16 @@ static struct fb_fix_screeninfo dlfb_fix = {
 
 /* as per usb-skeleton. Can we get raw page and avoid overhead? */
 #define BULK_SIZE 512
-#define MAX_TRANSFER (PAGE_SIZE - BULK_SIZE)
-#define WRITES_IN_FLIGHT (32)
+#define MAX_TRANSFER (PAGE_SIZE*16 - BULK_SIZE)
+#define WRITES_IN_FLIGHT (4)
 
 /* dlfb-specific usb helper functions */
 static int dlfb_sync_bulk_msg(struct dlfb_data *dev, void *buf, int len);
-static void dlfb_render_urb_completion(struct urb *urb);
-static struct urb* dlfb_alloc_render_urb(struct dlfb_data *dev);
-static int dlfb_submit_render_urb(struct urb * urb, size_t len);
+static void dlfb_urb_completion(struct urb *urb);
+static struct urb* dlfb_get_urb(struct dlfb_data *dev);
+static int dlfb_submit_urb(struct dlfb_data *dev, struct urb * urb, size_t len);
+static int dlfb_alloc_urb_list(struct dlfb_data *dev, int count, size_t size);
+static void dlfb_free_urb_list(struct dlfb_data *dev);
 
 /*
  * Inserts a specific DisplayLink controller command into the provided
@@ -248,13 +249,7 @@ static int dlfb_set_video_mode(struct dlfb_data *dev,
 	writesize = wrptr - buf;
 
 	retval = dlfb_sync_bulk_msg(dev, buf, writesize);
-	if (retval) {
-		dev_err(&dev->udev->dev, "Problem %d with submit write bulk.\n",
-					retval);
-		goto error;
-	}
 
-error:
 	kfree(buf);
 	return retval;
 }
@@ -526,7 +521,7 @@ int image_blit(struct dlfb_data *dev, int x, int y,
 	if (!atomic_read(&dev->usb_active))
 		return 0;
 
-	urb = dlfb_alloc_render_urb(dev);
+	urb = dlfb_get_urb(dev);
 	if (!urb)
 		return 0;
 
@@ -569,9 +564,11 @@ int image_blit(struct dlfb_data *dev, int x, int y,
 
 			if (cmd >= cmd_end) {
 				int len = cmd - cmd_start;
-				dlfb_submit_render_urb(urb, len);
+				ret = dlfb_submit_urb(dev, urb, len);
+				if (ret)
+					return 0; /* lost pixels is set */
 				bytes_sent += len;
-				urb = dlfb_alloc_render_urb(dev);
+				urb = dlfb_get_urb(dev);
 				if (!urb)
 					return 0; /* lost_pixels is set */
 				cmd = urb->transfer_buffer;
@@ -589,9 +586,10 @@ int image_blit(struct dlfb_data *dev, int x, int y,
 	{
 		/* Send partial buffer remaining before exiting */
 		int len = cmd - cmd_start;
-		ret = dlfb_submit_render_urb(urb, len);
+		ret = dlfb_submit_urb(dev, urb, len);
 		bytes_sent += len;
-	}
+	} else
+		dlfb_urb_completion(urb);
 
 	atomic_add(bytes_sent, &dev->bytes_sent);
 	atomic_add(bytes_identical, &dev->bytes_identical);
@@ -913,9 +911,9 @@ static int dlfb_open(struct fb_info *info, int user)
 static int dlfb_release(struct fb_info *info, int user)
 {
 	struct dlfb_data *dev_info = info->par;
-/*
+
 	image_blit(dev_info, 0, 0, info->var.xres, info->var.yres,
-		   info->screen_base); */
+		   info->screen_base);
 	return 0;
 }
 
@@ -1079,13 +1077,17 @@ static ssize_t metrics_apis_used_show(struct device *fbdev,
 	return snprintf(buf, PAGE_SIZE,
 			"Calls to\ndamage: %u\nblit: %u\n"
 			"defio faults: %u\ncopy: %u\n"
-			"fill: %u\nShadow framebuffer in use? %s\n",
+			"fill: %u\nurbs available %d(%d)\n"
+			"Shadow framebuffer in use? %s\n"
+			"Any lost pixels? %s\n",
 			atomic_read(&dev->damage_count),
 			atomic_read(&dev->blit_count),
 			atomic_read(&dev->defio_fault_count),
 			atomic_read(&dev->copy_count),
 			atomic_read(&dev->fill_count),
-			(dev->backing_buffer) ? "yes" : "no");
+			dev->urbs.available, dev->urbs.limit_sem.count,
+			(dev->backing_buffer) ? "yes" : "no",
+			atomic_read(&dev->lost_pixels) ? "yes" : "no");
 }
 
 static ssize_t metrics_reset_store(struct device *fbdev,
@@ -1202,8 +1204,6 @@ static int dlfb_probe(struct usb_interface *interface,
 
 	usbdev = interface_to_usbdev(interface);
 
-	err("dlfb_probe: DisplayLink device PID %x\n", id->idProduct);
-
 	dev = kzalloc(sizeof(*dev), GFP_KERNEL);
 	if (dev == NULL) {
 		err("dlfb_probe: failed alloc of dev struct\n");
@@ -1214,10 +1214,11 @@ static int dlfb_probe(struct usb_interface *interface,
 	kref_init(&dev->kref); /* matching kref_put in usb .disconnect fn */
 	kref_get(&dev->kref); /* matching kref_put in .fb_destroy function*/
 
-	sema_init(&dev->limit_sem, WRITES_IN_FLIGHT);
-
 	dev->udev = usbdev;
 	usb_set_intfdata(interface, dev);
+
+	if (!dlfb_alloc_urb_list(dev, WRITES_IN_FLIGHT, MAX_TRANSFER))
+		goto error;
 
 	/* We don't register a new USB class. Our client interface is fbdev */
 
@@ -1273,7 +1274,7 @@ static int dlfb_probe(struct usb_interface *interface,
 	 */
 	dev->backing_buffer = vmalloc(videomemorysize);
 	if (!dev->backing_buffer)
-		dev_warn(&interface->dev, "No backing buffer allocated!\n");
+		dev_warn(&dev->udev->dev, "No backing buffer allocated!\n");
 
 	info->fbops = &dlfb_ops;
 
@@ -1292,7 +1293,7 @@ static int dlfb_probe(struct usb_interface *interface,
 
 	retval = fb_alloc_cmap(&info->cmap, 256, 0);
 	if (retval < 0) {
-		dev_err(&interface->dev, "Failed to allocate colormap\n");
+		dev_err(&dev->udev->dev, "Failed to allocate colormap\n");
 		goto error;
 	}
 
@@ -1317,7 +1318,7 @@ static int dlfb_probe(struct usb_interface *interface,
 	draw_rect(dev, 0, 0, dev->info->var.xres,
 		  dev->info->var.yres, 0x30, 0xff, 0x30);
 
-	dev_err(&interface->dev, "DisplayLink USB device %d now attached, "
+	dev_err(&dev->udev->dev, "udlfb: DisplayLink USB device %d attached, "
 			"using %dK of memory\n", info->node,
 		 ((dev->backing_buffer) ?
 		  videomemorysize * 2 : videomemorysize) >> 10);
@@ -1330,6 +1331,9 @@ error:
 			dlfb_destroy(info);
 		} else
 			kref_put(&dev->kref, dlfb_delete);
+
+		if (dev->urbs.count > 0)
+			dlfb_free_urb_list(dev);
 		kref_put(&dev->kref, dlfb_delete); /* last ref from kref_init */
 
 		/* dev has been deallocated. Do not dereference */
@@ -1357,11 +1361,14 @@ static void dlfb_disconnect(struct usb_interface *interface)
 	}
 
 	if (info) {
-		dev_info(&interface->dev, "Detaching DisplayLink device %d.\n",
+		dev_info(&dev->udev->dev, "Detaching DisplayLink device %d.\n",
 						info->node);
 		unregister_framebuffer(info);
 		dlfb_destroy(info);
 	}
+
+	/* this function will wait for all in-flight urbs to complete */
+	dlfb_free_urb_list(dev);
 
 	/* release reference taken by kref_init in probe() */
 	kref_put(&dev->kref, dlfb_delete);
@@ -1402,93 +1409,189 @@ module_exit(dlfb_exit);
 static int dlfb_sync_bulk_msg(struct dlfb_data *dev, void *buf, int len)
 {
 	int written = 0;
+	int ret;
 
-	return usb_bulk_msg(dev->udev, usb_sndbulkpipe(dev->udev, 1),
+	ret = usb_bulk_msg(dev->udev, usb_sndbulkpipe(dev->udev, 1),
 			      buf, len, &written, 0);
+	if (ret)
+		dev_err(&dev->udev->dev,
+			"udlfb: usb_bulk_msg returned %x, wrote %d bytes\n",
+			ret, written);
+	return ret;
 }
 
-static void dlfb_render_urb_completion(struct urb *urb)
+static void dlfb_urb_completion(struct urb *urb)
 {
-	struct dlfb_data *dev = urb->context;
+	struct urb_node *unode = urb->context;
+	struct dlfb_data *dev = unode->dev;
+	unsigned long flags;
 
 	/* sync/async unlink faults aren't errors */
 	if (urb->status) {
 		if (!(urb->status == -ENOENT ||
 		    urb->status == -ECONNRESET ||
 		    urb->status == -ESHUTDOWN)) {
-			err("%s - nonzero write bulk status received: %d",
+			dev_err(&dev->udev->dev,
+				"%s - nonzero write bulk status received: %d",
 				__func__, urb->status);
 			atomic_set(&dev->lost_pixels, 1);
 		}
 	}
 
-	/* free up our allocated buffer */
-	usb_buffer_free(urb->dev, MAX_TRANSFER,
-			urb->transfer_buffer, urb->transfer_dma);
+	urb->transfer_buffer_length = dev->urbs.size; /* reset to actual */
 
-	up(&dev->limit_sem);
+	spin_lock_irqsave(&dev->urbs.lock, flags);
+	list_add_tail(&unode->entry, &dev->urbs.list);
+	dev->urbs.available++;
+	spin_unlock_irqrestore(&dev->urbs.lock, flags);
 
-	kref_put(&dev->kref, dlfb_delete);
+	up(&dev->urbs.limit_sem);
 }
 
-/*
- * May fail.  If so, dev->lost_pixels is set, needs future whole screen refresh
- */
-static struct urb* dlfb_alloc_render_urb(struct dlfb_data *dev)
+static void dlfb_free_urb_list(struct dlfb_data *dev)
 {
-	struct urb *urb = NULL;
-	char * buf;
+	int count = dev->urbs.count;
+	struct list_head *node;
+	struct urb_node *unode;
+	struct urb *urb;
+	int ret;
+	unsigned long flags;
 
-	/* We tend to flood the bus.  Will frequently be waiting here */
-	if (down_interruptible(&dev->limit_sem))
-		goto error;
+	dev_err(&dev->udev->dev, "shutdown - freeing all render urbs\n");
 
-	urb = usb_alloc_urb(0, GFP_KERNEL);
-	if (!urb)
-		goto error;
-
-	buf = usb_buffer_alloc(dev->udev, MAX_TRANSFER, GFP_KERNEL,
-					&urb->transfer_dma);
-	if (!buf)
+	/* keep waiting and freeing, until we've got 'em all */
+	while (count--)
 	{
+		/* Warnings mean a memory leak. */
+		ret = down_interruptible(&dev->urbs.limit_sem);
+		WARN_ON(ret);
+
+		spin_lock_irqsave(&dev->urbs.lock, flags);
+
+		node = dev->urbs.list.next; /* have reserved one with sem */
+		list_del_init(node);
+
+		spin_unlock_irqrestore(&dev->urbs.lock, flags);
+
+		unode = list_entry(node, struct urb_node, entry);
+		urb = unode->urb;
+
+		/* Free each separately allocated piece */
+		usb_buffer_free(urb->dev, dev->urbs.size,
+			urb->transfer_buffer, urb->transfer_dma);
 		usb_free_urb(urb);
-		goto error;
+		kfree(node);
 	}
 
-	/* urb->transfer_buffer_length set to actual before submit*/
-	usb_fill_bulk_urb(urb, dev->udev, usb_sndbulkpipe(dev->udev, 1),
-		buf, MAX_TRANSFER, dlfb_render_urb_completion, dev);
-	urb->transfer_flags |= URB_NO_TRANSFER_DMA_MAP;
+	kref_put(&dev->kref, dlfb_delete);
 
-	/*
-	 * We are/must be holding a reference for the client interface
-	 * that allowed this rendering operation to be called, which lets
-	 * us get this additional one, released in the completion routine
-	 */
-	kref_get(&dev->kref);
-
-	return urb;
-
-error:
-	atomic_set(&dev->lost_pixels, 1);
-	return NULL;
 }
 
-static int dlfb_submit_render_urb(struct urb * urb, size_t len)
+static int dlfb_alloc_urb_list(struct dlfb_data *dev, int count, size_t size)
+{
+	int i = 0;
+	struct urb *urb;
+	struct urb_node *unode;
+	char *buf;
+
+	spin_lock_init(&dev->urbs.lock);
+
+	dev->urbs.size = size;
+	INIT_LIST_HEAD(&dev->urbs.list);
+
+	while (i < count )
+	{
+		unode = kmalloc(sizeof(struct urb_node), GFP_KERNEL);
+		if (!unode)
+			break;
+		unode->dev = dev;
+
+		urb = usb_alloc_urb(0, GFP_KERNEL);
+		if (!urb) {
+			kfree(unode);
+			break;
+		}
+		unode->urb = urb;
+
+		buf = usb_buffer_alloc(dev->udev, MAX_TRANSFER, GFP_KERNEL,
+					&urb->transfer_dma);
+		if (!buf)
+		{
+			kfree(unode);
+			usb_free_urb(urb);
+			break;
+		}
+
+		/* urb->transfer_buffer_length set to actual before submit */
+		usb_fill_bulk_urb(urb, dev->udev, usb_sndbulkpipe(dev->udev, 1),
+			buf, size, dlfb_urb_completion, unode);
+		urb->transfer_flags |= URB_NO_TRANSFER_DMA_MAP;
+
+		list_add_tail(&unode->entry, &dev->urbs.list);
+
+		i++;
+	}
+
+	sema_init(&dev->urbs.limit_sem, i);
+	dev->urbs.count = i;
+	dev->urbs.available = i;
+
+	kref_get(&dev->kref); /* released in free_render_urbs() */
+
+	dev_err(&dev->udev->dev, "dlfb: allocated %d %d byte urbs \n",
+				i, size);
+
+	return i;
+}
+
+static struct urb* dlfb_get_urb(struct dlfb_data *dev) {
+	int ret = 0;
+	struct list_head *entry;
+	struct urb_node *unode;
+	struct urb *urb = NULL;
+	unsigned long flags;
+
+	/* Wait for an in-flight buffer to complete and get re-queued */
+	ret = down_interruptable(&dev->urbs.limit_sem);
+	if (ret) {
+		atomic_set(&dev->lost_pixels, 1);
+		dev_err(&dev->udev->dev, "wait for urb interrupted: %x\n", ret);
+		goto error;
+	}
+	spin_lock_irqsave(&dev->urbs.lock, flags);
+
+	BUG_ON(list_empty(&dev->urbs.list)); /* reserved one with limit_sem */
+	entry = dev->urbs.list.next;
+	list_del_init(entry);
+	dev->urbs.available--;
+
+	spin_unlock_irqrestore(&dev->urbs.lock, flags);
+
+	unode = list_entry(entry, struct urb_node, entry);
+	urb = unode->urb;
+
+error:
+	return urb;
+}
+
+static int dlfb_submit_urb(struct dlfb_data *dev, struct urb *urb, size_t len)
 {
 	int ret;
 
+	BUG_ON(len > dev->urbs.size);
+
 	urb->transfer_buffer_length = len; /* set to actual payload len */
 	ret = usb_submit_urb(urb, GFP_KERNEL);
-	if (ret)
-		dlfb_render_urb_completion(urb); /* because no one else will */
-
-	usb_free_urb(urb);
-
+	if (ret) {
+		dlfb_urb_completion(urb); /* because no one else will */
+		atomic_set(&dev->lost_pixels, 1);
+		dev_err(&dev->udev->dev, "usb_submit_urb error %x\n", ret);
+	}
 	return ret;
 }
 
 MODULE_AUTHOR("Roberto De Ioris <roberto@unbit.it>, "
-	      "Jaya Kumar <jayakumar.lkml@gmail.com>");
-MODULE_DESCRIPTION(DRIVER_VERSION);
+	      "Jaya Kumar <jayakumar.lkml@gmail.com>, "
+	      "Bernie Thompson <bernie@plugable.com>");
+MODULE_DESCRIPTION("DisplayLink kernel framebuffer driver");
 MODULE_LICENSE("GPL");
