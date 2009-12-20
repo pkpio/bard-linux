@@ -40,7 +40,7 @@ static struct fb_fix_screeninfo dlfb_fix = {
 #define NR_USB_REQUEST_I2C_SUB_IO 0x02
 #define NR_USB_REQUEST_CHANNEL 0x12
 
-/* as per usb-skeleton. Can we get raw page and avoid overhead? */
+/* -BULK_SIZE as per usb-skeleton. Can we get full page and avoid overhead? */
 #define BULK_SIZE 512
 #define MAX_TRANSFER (PAGE_SIZE*16 - BULK_SIZE)
 #define WRITES_IN_FLIGHT (4)
@@ -1552,12 +1552,13 @@ static struct urb* dlfb_get_urb(struct dlfb_data *dev) {
 	unsigned long flags;
 
 	/* Wait for an in-flight buffer to complete and get re-queued */
-	ret = down_interruptable(&dev->urbs.limit_sem);
+	ret = down_killable(&dev->urbs.limit_sem);
 	if (ret) {
 		atomic_set(&dev->lost_pixels, 1);
 		dev_err(&dev->udev->dev, "wait for urb interrupted: %x\n", ret);
 		goto error;
 	}
+
 	spin_lock_irqsave(&dev->urbs.lock, flags);
 
 	BUG_ON(list_empty(&dev->urbs.list)); /* reserved one with limit_sem */
