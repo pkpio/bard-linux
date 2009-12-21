@@ -37,22 +37,6 @@ static struct fb_fix_screeninfo dlfb_fix = {
 	.accel =        FB_ACCEL_NONE,
 };
 
-#define NR_USB_REQUEST_I2C_SUB_IO 0x02
-#define NR_USB_REQUEST_CHANNEL 0x12
-
-/* -BULK_SIZE as per usb-skeleton. Can we get full page and avoid overhead? */
-#define BULK_SIZE 512
-#define MAX_TRANSFER (PAGE_SIZE*16 - BULK_SIZE)
-#define WRITES_IN_FLIGHT (4)
-
-/* dlfb-specific usb helper functions */
-static int dlfb_sync_bulk_msg(struct dlfb_data *dev, void *buf, int len);
-static void dlfb_urb_completion(struct urb *urb);
-static struct urb* dlfb_get_urb(struct dlfb_data *dev);
-static int dlfb_submit_urb(struct dlfb_data *dev, struct urb * urb, size_t len);
-static int dlfb_alloc_urb_list(struct dlfb_data *dev, int count, size_t size);
-static void dlfb_free_urb_list(struct dlfb_data *dev);
-
 /*
  * Inserts a specific DisplayLink controller command into the provided
  * buffer.
@@ -332,28 +316,28 @@ static struct usb_driver dlfb_driver;
 
 #define MIN(a,b) ((a)>(b)?(b):(a))
 
-
 /*
- * Trims identical pixels from front and back of line
- * Sets start and end pixel indices
- * And returns count of identical pixels
- * TODO: optimized version (alignment, natural sizes)
+ * Trims identical data from front and back of line
+ * Sets new front buffer address and width
+ * And returns byte count of identical pixels
+ * Assumes CPU natural alignment (unsigned long)
+ * for back and front buffer ptrs and width
  */
-static int trim_hline(const u16 *front, const u16 *back, int width,
-				 int *start, int *end) {
-
-	u16 j, k;
-	u16 identical = width;
-
-	*start = width;
-	*end = width;
+static int trim_hline(const u8* bback, const u8 **bfront, int *width_bytes)
+{
+	int j, k;
+	const unsigned long *back = (const unsigned long *) bback;
+	const unsigned long *front = (const unsigned long *) *bfront;
+	const int width = *width_bytes / sizeof(unsigned long);
+	int identical = width;
+	int start = width;
+	int end = width;
 
 	for (j = 0; j < width; j++)
 	{
 		if (back[j] != front[j])
 		{
-			*start = j;
-			identical = j;
+			start = j;
 			break;
 		}
 	}
@@ -362,16 +346,19 @@ static int trim_hline(const u16 *front, const u16 *back, int width,
 	{
 		if (back[k] != front[k])
 		{
-			*end = k+1;
-			identical += (width - 1) - k;
+			end = k+1;
 			break;
 		}
 	}
 
-	return identical;
+	identical = start + (width - end);
+	*bfront = (u8*) &front[start];
+	*width_bytes = (end - start) * sizeof(unsigned long);
+
+	return (identical * sizeof(unsigned long));
 }
 
-/* 
+/*
 Render a command stream for an encoded horizontal line segment of pixels.
 The fundamental building block of rendering for current Displaylink devices.
 
@@ -505,13 +492,18 @@ int image_blit(struct dlfb_data *dev, int x, int y,
 	       int width, int height, char *data)
 {
 	int i, ret;
-	char *cmd, *cmd_start, *cmd_end;
+	char *cmd;
 	cycles_t start_cycles, end_cycles;
 	int bytes_sent = 0;
 	int bytes_identical = 0;
 	struct urb *urb;
+	int aligned_x;
 
 	start_cycles = get_cycles();
+
+	aligned_x = DL_ALIGN_DOWN(x, sizeof(unsigned long));
+	width = DL_ALIGN_UP(width + (x-aligned_x), sizeof(unsigned long));
+	x = aligned_x;
 
 	if ((width <= 0) ||
 	    (x + width > dev->info->var.xres) ||
@@ -524,68 +516,21 @@ int image_blit(struct dlfb_data *dev, int x, int y,
 	urb = dlfb_get_urb(dev);
 	if (!urb)
 		return 0;
-
-	/* cmd_end points past end of buffer */
 	cmd = urb->transfer_buffer;
-	cmd_start = cmd;
-	cmd_end = &cmd[urb->transfer_buffer_length];
 
 	for (i = y; i < y + height ; i++) {
-		const uint16_t *line_start, *line_end, *next_pixel;
-		const int line_length = dev->info->fix.line_length * i;
-		const int byte_offset = line_length + (x * BPP);
-		uint32_t dev_addr = dev->base16 + byte_offset;
-		uint16_t *back_start = 0;
+		const int line_offset = dev->info->fix.line_length * i;
+		const int byte_offset = line_offset + (x * BPP);
 
-		line_start = (uint16_t *) (data + byte_offset);
-		next_pixel = line_start;
-		line_end = &line_start[width+1];
-
-		if (dev->backing_buffer) {
-			int start = 0;
-			int end = 0;
-			int count;
-
-			back_start = (uint16_t *) (dev->backing_buffer +
-						byte_offset);
-			count = trim_hline(line_start, back_start,
-					   width, &start, &end);
-
-			next_pixel = &line_start[start];
-			line_end = &line_start[end];
-			dev_addr += start * BPP;
-			bytes_identical += count * BPP;
-		}
-
-		while (next_pixel < line_end) {
-
-			render_hline(&next_pixel, line_end, &dev_addr,
-				(uint8_t**) &cmd, (uint8_t*)  cmd_end);
-
-			if (cmd >= cmd_end) {
-				int len = cmd - cmd_start;
-				ret = dlfb_submit_urb(dev, urb, len);
-				if (ret)
-					return 0; /* lost pixels is set */
-				bytes_sent += len;
-				urb = dlfb_get_urb(dev);
-				if (!urb)
-					return 0; /* lost_pixels is set */
-				cmd = urb->transfer_buffer;
-				cmd_start = cmd;
-				cmd_end = &cmd[urb->transfer_buffer_length];
-			}
-		}
-
-		if (dev->backing_buffer)
-			memcpy((char*)back_start, (char*) line_start,
-			       width * BPP);
+		dlfb_render_hline(dev, &urb, (char*) dev->info->fix.smem_start,
+				  &cmd, byte_offset, width * BPP,
+				  &bytes_identical, &bytes_sent);
 	}
 
-	if (cmd > cmd_start)
+	if (cmd > (char*) urb->transfer_buffer)
 	{
 		/* Send partial buffer remaining before exiting */
-		int len = cmd - cmd_start;
+		int len = cmd - (char*) urb->transfer_buffer;
 		ret = dlfb_submit_urb(dev, urb, len);
 		bytes_sent += len;
 	} else
@@ -788,7 +733,6 @@ static void dlfb_imageblit(struct fb_info *info, const struct fb_image *image)
 	int ret;
 	struct dlfb_data *dev = info->par;
 
-
 	cfb_imageblit(info, image);
 	ret =
 	    image_blit(dev, image->dx, image->dy, image->width, image->height,
@@ -853,6 +797,7 @@ static int dlfb_ioctl(struct fb_info *info, unsigned int cmd, unsigned long arg)
 	}
 
 	if (cmd == 0xAA) {
+		atomic_set(&dev_info->use_damage, 1);
 		image_blit(dev_info, area->x, area->y, area->w, area->h,
 			   info->screen_base);
 		atomic_inc(&dev_info->damage_count);
@@ -943,7 +888,7 @@ static void dlfb_destroy(struct fb_info *info)
 {
 	struct dlfb_data *dev = info->par;
 
-	/* TODO: fb_deferred_io_cleanup(info); */
+	fb_deferred_io_cleanup(info);
 
 	if (info->cmap.len != 0)
 		fb_dealloc_cmap(&info->cmap);
@@ -1035,7 +980,7 @@ static struct fb_ops dlfb_ops = {
 	.fb_fillrect = dlfb_fillrect,
 	.fb_copyarea = dlfb_copyarea,
 	.fb_imageblit = dlfb_imageblit,
-	.fb_mmap = dlfb_mmap,
+/*	.fb_mmap = dlfb_mmap, let defio handle */
 	.fb_ioctl = dlfb_ioctl,
 	.fb_open = dlfb_open,
 	.fb_release = dlfb_release,
@@ -1191,6 +1136,127 @@ static void dlfb_parse_edid(struct dlfb_data *dev,
 	fb_videomode_to_var(var, default_vmode);
 }
 
+/*
+ * There are 3 copies of every pixel: The front buffer that the fbdev
+ * client renders to, the actual framebuffer across the USB bus in hardware
+ * (that we can only write to, slowly, and can never read), and (optionally)
+ * our shadow copy that tracks what's been sent to that hardware buffer.
+ */
+static void dlfb_render_hline(struct dlfb_data *dev, struct urb **urb_ptr,
+			      const char *front, char **urb_buf_ptr,
+			      u32 byte_offset, u32 byte_width,
+			      int *ident_ptr, int *sent_ptr)
+{
+	const u8 *line_start, *line_end, *next_pixel, *back_start;
+	u32 dev_addr = dev->base16 + byte_offset;
+	struct urb *urb = *urb_ptr;
+	u8* cmd = *urb_buf_ptr;
+	u8* cmd_end = (u8*) urb->transfer_buffer + urb->transfer_buffer_length;
+
+	line_start = (u8 *) (front + byte_offset);
+	next_pixel = line_start;
+	line_end = &line_start[byte_width+1];
+	back_start = (u8 *) (dev->backing_buffer + byte_offset);
+
+	if (dev->backing_buffer) {
+		int offset;
+
+		*ident_ptr += trim_hline(back_start, &next_pixel, &byte_width);
+
+		offset = next_pixel - line_start;
+		line_end = next_pixel + byte_width;
+		dev_addr += offset;
+		back_start += offset;
+		line_start += offset;
+	}
+
+	while (next_pixel < line_end) {
+
+		render_hline((const uint16_t**) &next_pixel,
+			     (const uint16_t*) line_end, &dev_addr,
+			(u8**) &cmd, (u8*) cmd_end);
+
+		if (cmd >= cmd_end) {
+			int len = cmd - (u8*) urb->transfer_buffer;
+			if (dlfb_submit_urb(dev, urb, len))
+				return; /* lost pixels is set */
+			*sent_ptr += len;
+			urb = dlfb_get_urb(dev);
+			if (!urb)
+				return; /* lost_pixels is set */
+			*urb_ptr = urb;
+			cmd = urb->transfer_buffer;
+			cmd_end = &cmd[urb->transfer_buffer_length];
+		}
+	}
+
+	if (dev->backing_buffer)
+		memcpy((char*)back_start, (char*) line_start,
+		       byte_width);
+
+	*urb_buf_ptr = cmd;
+}
+
+static void dlfb_dpy_deferred_io(struct fb_info *info,
+				struct list_head *pagelist)
+{
+	struct page *cur;
+	struct fb_deferred_io *fbdefio = info->fbdefio;
+	struct dlfb_data *dev = info->par;
+	struct urb *urb;
+	char *cmd;
+	cycles_t start_cycles, end_cycles;
+	int bytes_sent = 0;
+	int bytes_identical = 0;
+	int bytes_rendered = 0;
+	int fault_count = 0;
+
+	if (!atomic_read(&dev->usb_active))
+		return;
+
+	if (atomic_read(&dev->use_damage))
+		return;
+
+	start_cycles = get_cycles();
+
+	urb = dlfb_get_urb(dev);
+	if (!urb)
+		return;
+	cmd = urb->transfer_buffer;
+
+	/* walk the written page list and push the data */
+	list_for_each_entry(cur, &fbdefio->pagelist, lru) {
+		dlfb_render_hline(dev, &urb, (char*) info->fix.smem_start,
+				  &cmd, cur->index << PAGE_SHIFT,
+				  PAGE_SIZE, &bytes_identical, &bytes_sent);
+		bytes_rendered += PAGE_SIZE;
+		fault_count++;
+	}
+
+	if (cmd > (char *) urb->transfer_buffer)
+	{
+		/* Send partial buffer remaining before exiting */
+		int len = cmd - (char *) urb->transfer_buffer;
+		dlfb_submit_urb(dev, urb, len);
+		bytes_sent += len;
+	} else
+		dlfb_urb_completion(urb);
+
+	atomic_add(fault_count, &dev->defio_fault_count);
+	atomic_add(bytes_sent, &dev->bytes_sent);
+	atomic_add(bytes_identical, &dev->bytes_identical);
+	atomic_add(bytes_rendered, &dev->bytes_rendered);
+	end_cycles = get_cycles();
+	atomic_add(((unsigned int) ((end_cycles - start_cycles)
+		    >> 10)), /* Kcycles */
+		   &dev->cpu_kcycles_used);
+}
+
+static struct fb_deferred_io dlfb_defio = {
+	.delay          = 5,
+	.deferred_io    = dlfb_dpy_deferred_io,
+};
+
 static int dlfb_probe(struct usb_interface *interface,
 			const struct usb_device_id *id)
 {
@@ -1290,13 +1356,8 @@ static int dlfb_probe(struct usb_interface *interface,
 	var->green = green;
 	var->blue = blue;
 
-	/*
-	 * TODO: Enable FB_CONFIG_DEFIO support
-
-	 info->fbdefio = &dlfb_defio;
-	 fb_deferred_io_init(info);
-
-	 */
+	info->fbdefio = &dlfb_defio;
+	fb_deferred_io_init(info);
 
 	retval = fb_alloc_cmap(&info->cmap, 256, 0);
 	if (retval < 0) {
@@ -1310,7 +1371,6 @@ static int dlfb_probe(struct usb_interface *interface,
 
 	dlfb_select_std_channel(dev);
 	dlfb_set_video_mode(dev, var);
-	/* TODO: dlfb_dpy_update(dev); */
 
 	retval = register_framebuffer(info);
 	if (retval < 0)
@@ -1464,7 +1524,7 @@ static void dlfb_free_urb_list(struct dlfb_data *dev)
 	int ret;
 	unsigned long flags;
 
-	dev_err(&dev->udev->dev, "shutdown - freeing all render urbs\n");
+	dev_err(&dev->udev->dev, "udlfb: freeing all render urbs\n");
 
 	/* keep waiting and freeing, until we've got 'em all */
 	while (count--)

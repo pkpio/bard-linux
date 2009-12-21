@@ -25,6 +25,7 @@ struct dlfb_data {
 	atomic_t fb_count;
 	atomic_t usb_active; /* 0 = update virtual buffer, but no usb traffic */
 	atomic_t lost_pixels; /* 1 = a render op failed. Need screen refresh */
+	atomic_t use_damage; /* 1 = don't process defio pages */
 	char edid[128];
 	int sku_pixel_limit;
 	int base16;
@@ -42,6 +43,39 @@ struct dlfb_data {
 	atomic_t damage_count;
 	atomic_t defio_fault_count;
 };
+
+#define NR_USB_REQUEST_I2C_SUB_IO 0x02
+#define NR_USB_REQUEST_CHANNEL 0x12
+
+/* -BULK_SIZE as per usb-skeleton. Can we get full page and avoid overhead? */
+#define BULK_SIZE 512
+#define MAX_TRANSFER (PAGE_SIZE*16 - BULK_SIZE)
+#define WRITES_IN_FLIGHT (4)
+
+/* USB dlfb-specific helper functions */
+static int dlfb_sync_bulk_msg(struct dlfb_data *dev, void *buf, int len);
+static void dlfb_urb_completion(struct urb *urb);
+static struct urb* dlfb_get_urb(struct dlfb_data *dev);
+static int dlfb_submit_urb(struct dlfb_data *dev, struct urb * urb, size_t len);
+static int dlfb_alloc_urb_list(struct dlfb_data *dev, int count, size_t size);
+static void dlfb_free_urb_list(struct dlfb_data *dev);
+
+/* Framebuffer deferred IO functions */
+static void dlfb_dpy_deferred_io(struct fb_info *info,
+				 struct list_head *pagelist);
+
+/* Internal drawing functions */
+static int trim_hline(const u8* bback, const u8 **bfront, int *width_bytes);
+static void render_hline(
+	const uint16_t* *pixel_start_ptr,
+	const uint16_t*	const pixel_end,
+	uint32_t *device_address_ptr,
+	uint8_t **command_buffer_ptr,
+	const uint8_t* const cmd_buffer_end);
+static void dlfb_render_hline(struct dlfb_data *dev, struct urb **urb_ptr,
+			      const char *front, char **urb_buf_ptr,
+			      u32 byte_offset, u32 byte_width,
+			      int *ident_ptr, int *sent_ptr);
 
 static void dlfb_get_edid(struct dlfb_data *dev_info)
 {
@@ -62,5 +96,9 @@ static void dlfb_get_edid(struct dlfb_data *dev_info)
 }
 
 #define dlfb_set_register insert_command
+
+/* remove these once align.h patch is taken into kernel */
+#define DL_ALIGN_UP(x,a) ALIGN(x,a)
+#define DL_ALIGN_DOWN(x,a) ALIGN(x-(a-1), a)
 
 #endif
