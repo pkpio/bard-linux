@@ -18,14 +18,16 @@ struct urb_list {
 
 struct dlfb_data {
 	struct usb_device *udev;
+	struct device *gdev; /* &udev->dev */
 	struct fb_info *info;
 	struct urb_list urbs;
 	struct kref kref;
 	char *backing_buffer;
+	struct delayed_work deferred_work;
 	atomic_t fb_count;
 	atomic_t usb_active; /* 0 = update virtual buffer, but no usb traffic */
 	atomic_t lost_pixels; /* 1 = a render op failed. Need screen refresh */
-	atomic_t use_damage; /* 1 = don't process defio pages */
+	atomic_t defio_off; /* 1 = rely on ioctls and blit/copy/fill rects */
 	char edid[128];
 	int sku_pixel_limit;
 	int base16;
