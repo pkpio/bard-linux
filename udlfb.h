@@ -103,4 +103,13 @@ static void dlfb_get_edid(struct dlfb_data *dev_info)
 #define DL_ALIGN_UP(x,a) ALIGN(x,a)
 #define DL_ALIGN_DOWN(x,a) ALIGN(x-(a-1), a)
 
+/* KERN_ERR level for now - we need easy debug/feedback from all users still */
+#define dl_err(format, arg...) \
+	dev_err(dev->gdev, "dlfb: " format, ## arg)
+#define dl_warn(format, arg...) \
+	dev_err(dev->gdev, "dlfb: " format, ## arg)
+#define dl_notice(format, arg...) \
+	dev_err(dev->gdev, "dlfb: " format, ## arg)
+#define dl_info(format, arg...) \
+	dev_err(dev->gdev, "dlfb: " format, ## arg)
 #endif

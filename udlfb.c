@@ -642,8 +642,8 @@ static int dlfb_open(struct fb_info *info, int user)
  */
 	atomic_inc(&dev->fb_count);
 
-	dev_notice(dev->gdev, "dlfb open user=%d fb_info=%x count=%d\n",
-		user, (unsigned int) info, atomic_read(&dev->fb_count));
+	dl_notice("open /dev/fb%d user=%d count=%d\n",
+		  info->node, user, atomic_read(&dev->fb_count));
 
 	return 0;
 }
@@ -654,8 +654,8 @@ static int dlfb_release(struct fb_info *info, int user)
 
 	atomic_dec(&dev->fb_count);
 
-	dev_notice(dev->gdev, "dlfb release user=%d fb_info=%x count=%d\n",
-		user, (unsigned int) info, atomic_read(&dev->fb_count));
+	dl_notice("release /dev/fb%d user=%d count=%d\n",
+		  info->node, user, atomic_read(&dev->fb_count));
 
 	atomic_set(&dev->defio_off, 0);
 
@@ -924,7 +924,7 @@ static void dlfb_parse_edid(struct dlfb_data *dev,
 	} else {
 		struct fb_videomode fb_vmode = {0};
 
-		dev_err(dev->gdev, "dlfb: no EDID\n");
+		dl_err("Unable to get valid EDID from device/display\n");
 
 		/*
 		 * Add the standard VESA modes to our modelist
@@ -1109,7 +1109,7 @@ static int dlfb_probe(struct usb_interface *interface,
 
 	if (!dlfb_alloc_urb_list(dev, WRITES_IN_FLIGHT, MAX_TRANSFER)) {
 		retval = -ENOMEM;
-		dev_err(dev->gdev, "udlfb: alloc_urbs failed\n");
+		dl_err("dlfb_alloc_urb_list failed\n");
 		goto error;
 	}
 
@@ -1119,7 +1119,7 @@ static int dlfb_probe(struct usb_interface *interface,
 	info = framebuffer_alloc(0, &usbdev->dev);
 	if (!info) {
 		retval = -ENOMEM;
-		dev_err(dev->gdev, "udlfb: framebuffer_alloc fail\n");
+		dl_err("framebuffer_alloc failed\n");
 		goto error;
 	}
 	dev->info = info;
@@ -1149,7 +1149,7 @@ static int dlfb_probe(struct usb_interface *interface,
 	videomemory = vmalloc(videomemorysize);
 	if (!videomemory) {
 		retval = -ENOMEM;
-		dev_err(dev->gdev, "main framebuffer alloc fail\n");
+		dl_err("Virtual framebuffer alloc failed\n");
 		goto error;
 	}
 
@@ -1167,13 +1167,13 @@ static int dlfb_probe(struct usb_interface *interface,
 	 */
 	dev->backing_buffer = vmalloc(videomemorysize);
 	if (!dev->backing_buffer)
-		dev_warn(dev->gdev, "No backing buffer allocated!\n");
+		dl_warn("No shadow/backing buffer allcoated\n");
 	else
 		memset(dev->backing_buffer, 0, videomemorysize);
 
 	retval = fb_alloc_cmap(&info->cmap, 256, 0);
 	if (retval < 0) {
-		dev_err(dev->gdev, "Failed to allocate colormap\n");
+		dl_err("fb_alloc_cmap failed %x\n", retval);
 		goto error;
 	}
 
@@ -1199,7 +1199,7 @@ static int dlfb_probe(struct usb_interface *interface,
 
 	retval = register_framebuffer(info);
 	if (retval < 0) {
-		dev_err(dev->gdev, "reg_framebuffer fail %d\n", retval);
+		dl_err("register_framebuffer failed %d\n", retval);
 		goto error;
 	}
 	registered = 1;
@@ -1208,9 +1208,8 @@ static int dlfb_probe(struct usb_interface *interface,
 		device_create_file(info->dev, &fb_device_attrs[i]);
 	}
 
-	dev_err(dev->gdev, "udlfb: DisplayLink USB device /dev/fb%d attached "
-			"at %dx%d resolution, "
-			"using %dK framebuffer memory\n", info->node,
+	dl_err("DisplayLink USB device /dev/fb%d attached. %dx%d resolution."
+			" Using %dK framebuffer memory\n", info->node,
 			var->xres, var->yres,
 			((dev->backing_buffer) ?
 			videomemorysize * 2 : videomemorysize) >> 10);
@@ -1256,8 +1255,7 @@ static void dlfb_disconnect(struct usb_interface *interface)
 	dlfb_free_urb_list(dev);
 
 	if (info) {
-		dev_info(dev->gdev, "Detaching DisplayLink device %d.\n",
-						info->node);
+		dl_notice("Detaching /dev/fb%d\n", info->node);
 		unregister_framebuffer(info);
 		dlfb_destroy(info);
 	}
@@ -1306,9 +1304,7 @@ static int dlfb_sync_bulk_msg(struct dlfb_data *dev, void *buf, int len)
 	ret = usb_bulk_msg(dev->udev, usb_sndbulkpipe(dev->udev, 1),
 			      buf, len, &written, HZ);
 	if ((ret) || (written < len))
-		dev_err(dev->gdev,
-			"udlfb: usb_bulk_msg returned %x, wrote %d bytes\n",
-			ret, written);
+		dl_err("usb_bulk_msg err %x, wrote %d bytes\n", ret, written);
 	return ret;
 }
 
@@ -1323,8 +1319,7 @@ static void dlfb_urb_completion(struct urb *urb)
 		if (!(urb->status == -ENOENT ||
 		    urb->status == -ECONNRESET ||
 		    urb->status == -ESHUTDOWN)) {
-			dev_err(dev->gdev,
-				"%s - nonzero write bulk status received: %d\n",
+			dl_err("%s - nonzero write bulk status received: %d\n",
 				__func__, urb->status);
 			atomic_set(&dev->lost_pixels, 1);
 		}
@@ -1349,7 +1344,7 @@ static void dlfb_free_urb_list(struct dlfb_data *dev)
 	int ret;
 	unsigned long flags;
 
-	dev_notice(dev->gdev, "udlfb: freeing all render urbs\n");
+	dl_notice("Waiting for completes and freeing all render urbs\n");
 
 	/* keep waiting and freeing, until we've got 'em all */
 	while (count--)
@@ -1432,8 +1427,7 @@ static int dlfb_alloc_urb_list(struct dlfb_data *dev, int count, size_t size)
 
 	kref_get(&dev->kref); /* released in free_render_urbs() */
 
-	dev_notice(dev->gdev, "dlfb: allocated %d %d byte urbs \n",
-				i, size);
+	dl_notice("allocated %d %d byte urbs \n", i, (int) size);
 
 	return i;
 }
@@ -1449,7 +1443,7 @@ static struct urb* dlfb_get_urb(struct dlfb_data *dev) {
 	ret = down_killable(&dev->urbs.limit_sem);
 	if (ret) {
 		atomic_set(&dev->lost_pixels, 1);
-		dev_err(dev->gdev, "wait for urb interrupted: %x\n", ret);
+		dl_err("wait for urb interrupted: %x\n", ret);
 		goto error;
 	}
 
@@ -1480,7 +1474,7 @@ static int dlfb_submit_urb(struct dlfb_data *dev, struct urb *urb, size_t len)
 	if (ret) {
 		dlfb_urb_completion(urb); /* because no one else will */
 		atomic_set(&dev->lost_pixels, 1);
-		dev_err(dev->gdev, "usb_submit_urb error %x\n", ret);
+		dl_err("usb_submit_urb error %x\n", ret);
 	}
 	return ret;
 }
