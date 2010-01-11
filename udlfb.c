@@ -857,6 +857,28 @@ static ssize_t metrics_misc_show(struct device *fbdev,
 			atomic_read(&dev->lost_pixels) ? "yes" : "no");
 }
 
+static ssize_t edid_show(struct kobject *kobj, struct bin_attribute *a,
+			 char *buf, loff_t off, size_t count) {
+	struct device *fbdev = container_of(kobj, struct device, kobj);
+	struct fb_info *fb_info = dev_get_drvdata(fbdev);
+	struct dlfb_data *dev = fb_info->par;
+	char *edid = &dev->edid[0];
+	const size_t size = sizeof(dev->edid);
+
+	if (dlfb_parse_edid(dev, &fb_info->var, fb_info))
+		return 0;
+
+	if (off >= size)
+		return 0;
+
+	if (off + count > size)
+		count = size - off;
+	memcpy(buf, edid + off, count);
+
+	return count;
+}
+
+
 static ssize_t metrics_reset_store(struct device *fbdev,
 			   struct device_attribute *attr,
 			   const char *buf, size_t count)
@@ -877,6 +899,13 @@ static ssize_t metrics_reset_store(struct device *fbdev,
 	return count;
 }
 
+static struct bin_attribute edid_attr = {
+	.attr.name = "edid",
+	.attr.mode = 0444,
+	.size = 128,
+	.read = edid_show,
+};
+
 static struct device_attribute fb_device_attrs[] = {
 	__ATTR_RO(metrics_bytes_rendered),
 	__ATTR_RO(metrics_bytes_identical),
@@ -896,14 +925,15 @@ static struct device_attribute fb_device_attrs[] = {
  *
  * If EDID is not readable/valid, then modelist is all VESA modes,
  * monspecs is NULL, and fb_var_screeninfo is set to safe VESA mode
- *
+ * Returns 0 if EDID parses successfully 
  */
-static void dlfb_parse_edid(struct dlfb_data *dev,
+static int dlfb_parse_edid(struct dlfb_data *dev,
 			    struct fb_var_screeninfo *var,
 			    struct fb_info *info)
 {
 	int i;
 	const struct fb_videomode *default_vmode = NULL;
+	int result = 0;
 
 	fb_destroy_modelist(&info->modelist);
 	memset(&info->monspecs, 0, sizeof(info->monspecs));
@@ -925,6 +955,7 @@ static void dlfb_parse_edid(struct dlfb_data *dev,
 		struct fb_videomode fb_vmode = {0};
 
 		dl_err("Unable to get valid EDID from device/display\n");
+		result = 1;
 
 		/*
 		 * Add the standard VESA modes to our modelist
@@ -952,6 +983,8 @@ static void dlfb_parse_edid(struct dlfb_data *dev,
 
 	fb_videomode_to_var(var, default_vmode);
 	dlfb_var_color_format(var);
+
+	return result;
 }
 
 /*
@@ -1208,6 +1241,8 @@ static int dlfb_probe(struct usb_interface *interface,
 		device_create_file(info->dev, &fb_device_attrs[i]);
 	}
 
+	device_create_bin_file(info->dev, &edid_attr);
+
 	dl_err("DisplayLink USB device /dev/fb%d attached. %dx%d resolution."
 			" Using %dK framebuffer memory\n", info->node,
 			var->xres, var->yres,
@@ -1250,6 +1285,8 @@ static void dlfb_disconnect(struct usb_interface *interface)
 	for (i = 0; i < ARRAY_SIZE(fb_device_attrs); i++) {
 		device_remove_file(info->dev, &fb_device_attrs[i]);
 	}
+
+	device_remove_bin_file(info->dev, &edid_attr);
 
 	/* this function will wait for all in-flight urbs to complete */
 	dlfb_free_urb_list(dev);

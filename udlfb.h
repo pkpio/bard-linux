@@ -79,6 +79,11 @@ static void dlfb_render_hline(struct dlfb_data *dev, struct urb **urb_ptr,
 			      u32 byte_offset, u32 byte_width,
 			      int *ident_ptr, int *sent_ptr);
 
+/* probe, intialization, modeset functions */
+static int dlfb_parse_edid(struct dlfb_data *dev, struct fb_var_screeninfo *var,
+			   struct fb_info *info);
+
+
 static void dlfb_get_edid(struct dlfb_data *dev_info)
 {
 	int i;
