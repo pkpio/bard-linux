@@ -65,9 +65,12 @@ static char *insert_vidreg_unlock(char *buf)
  * Once you send this command, the DisplayLink framebuffer gets driven to the
  * display.
  */
-static char *insert_enable_hvsync(char *buf)
+static char *insert_enable_hvsync(char *buf, bool enable)
 {
-	return insert_command(buf, 0x1F, 0x00);
+	if (enable)
+		return insert_command(buf, 0x1F, 0x00);
+	else
+		return insert_command(buf, 0x1F, 0x01);
 }
 
 static char *insert_set_color_depth(char *buf, u8 selection)
@@ -227,7 +230,7 @@ static int dlfb_set_video_mode(struct dlfb_data *dev,
 	wrptr = insert_set_base8bpp(wrptr, dev->info->fix.smem_len);
 
 	wrptr = insert_set_vid_cmds(wrptr, var);
-	wrptr = insert_enable_hvsync(wrptr);
+	wrptr = insert_enable_hvsync(wrptr, true);
 	wrptr = insert_vidreg_unlock(wrptr);
 
 	writesize = wrptr - buf;
@@ -759,30 +762,28 @@ static int dlfb_set_par(struct fb_info *info)
 
 static int dlfb_blank(int blank_mode, struct fb_info *info)
 {
-	const int commands = 4;
 	struct dlfb_data *dev = info->par;
-	char *bufptr, *buf;
+	char *bufptr;
+	struct urb *urb;
 
-	buf = kzalloc(commands * BYTES_PER_COMMAND, GFP_KERNEL);
-	if (!buf)
+	urb = dlfb_get_urb(dev);
+	if (!urb)
 		return 0;
-	bufptr = buf;
+	bufptr = (char*) urb->transfer_buffer;
 
-	if (!atomic_read(&dev->usb_active))
-		return 0;
+	/* overloading usb_active.  UNBLANK can conflict with teardown */
 
-	bufptr = dlfb_set_register(bufptr, 0xFF, 0x00);
-
+	bufptr = insert_vidreg_lock(bufptr);
 	if (blank_mode != FB_BLANK_UNBLANK) {
-		bufptr = dlfb_set_register(bufptr, 0x1F, 0x01);
+		atomic_set(&dev->usb_active, 0);
+		bufptr = insert_enable_hvsync(bufptr, false);
 	} else {
-		bufptr = dlfb_set_register(bufptr, 0x1F, 0x00);
+		atomic_set(&dev->usb_active, 1);
+		bufptr = insert_enable_hvsync(bufptr, true);
 	}
-	bufptr = dlfb_set_register(bufptr, 0xFF, 0xFF);
+	bufptr = insert_vidreg_unlock(bufptr);
 
-	dlfb_sync_bulk_msg(dev, bufptr, commands * BYTES_PER_COMMAND);
-
-	kfree(buf);
+	dlfb_submit_urb(dev, urb, bufptr - (char*) urb->transfer_buffer);
 
 	return 0;
 }
