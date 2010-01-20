@@ -209,13 +209,15 @@ static int dlfb_set_video_mode(struct dlfb_data *dev,
 	char *wrptr;
 	int retval = 0;
 	int writesize;
+	struct urb *urb;
 
 	if (!atomic_read(&dev->usb_active))
 		return -EPERM;
 
-	buf = kzalloc(BULK_SIZE, GFP_KERNEL);
-	if (!buf)
+	urb = dlfb_get_urb(dev);
+	if (!urb)
 		return -ENOMEM;
+	buf = (char*) urb->transfer_buffer;
 
 	/*
 	* This first section has to do with setting the base address on the
@@ -235,9 +237,8 @@ static int dlfb_set_video_mode(struct dlfb_data *dev,
 
 	writesize = wrptr - buf;
 
-	retval = dlfb_sync_bulk_msg(dev, buf, writesize);
+	retval = dlfb_submit_urb(dev, urb, writesize);
 
-	kfree(buf);
 	return retval;
 }
 
@@ -1333,18 +1334,6 @@ static void __exit dlfb_exit(void)
 
 module_init(dlfb_init);
 module_exit(dlfb_exit);
-
-static int dlfb_sync_bulk_msg(struct dlfb_data *dev, void *buf, int len)
-{
-	int written = 0;
-	int ret;
-
-	ret = usb_bulk_msg(dev->udev, usb_sndbulkpipe(dev->udev, 1),
-			      buf, len, &written, HZ);
-	if ((ret) || (written < len))
-		dl_err("usb_bulk_msg err %x, wrote %d bytes\n", ret, written);
-	return ret;
-}
 
 static void dlfb_urb_completion(struct urb *urb)
 {

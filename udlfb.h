@@ -55,7 +55,6 @@ struct dlfb_data {
 #define WRITES_IN_FLIGHT (4)
 
 /* USB dlfb-specific helper functions */
-static int dlfb_sync_bulk_msg(struct dlfb_data *dev, void *buf, int len);
 static void dlfb_urb_completion(struct urb *urb);
 static struct urb* dlfb_get_urb(struct dlfb_data *dev);
 static int dlfb_submit_urb(struct dlfb_data *dev, struct urb * urb, size_t len);
