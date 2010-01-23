@@ -1,6 +1,13 @@
 #ifndef UDLFB_H
 #define UDLFB_H
 
+/*
+ * TODO: Use _IOWR() and fixed size struct
+ * To do so, need to update matching X server
+ */
+#define DLFB_IOCTL_RETURN_EDID	 0xAD
+#define DLFB_IOCTL_REPORT_DAMAGE 0xAA
+
 struct urb_node {
 	struct list_head entry;
 	struct dlfb_data *dev;
@@ -54,54 +61,10 @@ struct dlfb_data {
 #define MAX_TRANSFER (PAGE_SIZE*16 - BULK_SIZE)
 #define WRITES_IN_FLIGHT (4)
 
-/* USB dlfb-specific helper functions */
-static void dlfb_urb_completion(struct urb *urb);
-static struct urb* dlfb_get_urb(struct dlfb_data *dev);
-static int dlfb_submit_urb(struct dlfb_data *dev, struct urb * urb, size_t len);
-static int dlfb_alloc_urb_list(struct dlfb_data *dev, int count, size_t size);
-static void dlfb_free_urb_list(struct dlfb_data *dev);
-
-/* Framebuffer deferred IO functions */
-static void dlfb_dpy_deferred_io(struct fb_info *info,
-				 struct list_head *pagelist);
-
-/* Internal drawing functions */
-static int trim_hline(const u8* bback, const u8 **bfront, int *width_bytes);
-static void render_hline(
-	const uint16_t* *pixel_start_ptr,
-	const uint16_t*	const pixel_end,
-	uint32_t *device_address_ptr,
-	uint8_t **command_buffer_ptr,
-	const uint8_t* const cmd_buffer_end);
-static void dlfb_render_hline(struct dlfb_data *dev, struct urb **urb_ptr,
-			      const char *front, char **urb_buf_ptr,
-			      u32 byte_offset, u32 byte_width,
-			      int *ident_ptr, int *sent_ptr);
-
-/* probe, intialization, modeset functions */
-static int dlfb_parse_edid(struct dlfb_data *dev, struct fb_var_screeninfo *var,
-			   struct fb_info *info);
-
-
-static void dlfb_get_edid(struct dlfb_data *dev_info)
-{
-	int i;
-	int ret;
-	char rbuf[2];
-
-	for (i = 0; i < 128; i++) {
-		ret =
-		    usb_control_msg(dev_info->udev,
-				    usb_rcvctrlpipe(dev_info->udev, 0), (0x02),
-				    (0x80 | (0x02 << 5)), i << 8, 0xA1, rbuf, 2,
-				    0);
-		/*printk("ret control msg edid %d: %d [%d]\n",i, ret, rbuf[1]); */
-		dev_info->edid[i] = rbuf[1];
-	}
-
-}
-
-#define dlfb_set_register insert_command
+#define BPP                     2
+#define MAX_CMD_PIXELS		255
+#define MIN_RLX_PIX_BYTES       4
+#define MIN_RLX_CMD_BYTES	(7 + MIN_RLX_PIX_BYTES)
 
 /* remove these once align.h patch is taken into kernel */
 #define DL_ALIGN_UP(x,a) ALIGN(x,a)
