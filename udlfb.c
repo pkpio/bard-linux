@@ -668,7 +668,6 @@ static int dlfb_ops_ioctl(struct fb_info *info, unsigned int cmd,
 }
 
 /* taken from vesafb */
-
 static int
 dlfb_ops_setcolreg(unsigned regno, unsigned red, unsigned green,
 	       unsigned blue, unsigned transp, struct fb_info *info)
@@ -1051,21 +1050,6 @@ static struct device_attribute fb_device_attrs[] = {
 /*
  * This is necessary before we can communicate with the display controller.
  */
-static int dlfb_select_std_channel(struct dlfb_data *dev)
-{
-	int ret;
-	u8 set_def_chn[] = {	0x57, 0xCD, 0xDC, 0xA7,
-				0x1C, 0x88, 0x5E, 0x15,
-				0x60, 0xFE, 0xC6, 0x97,
-				0x16, 0x3D, 0x47, 0xF2  };
-
-	ret = usb_control_msg(dev->udev, usb_sndctrlpipe(dev->udev, 0),
-			NR_USB_REQUEST_CHANNEL,
-			(USB_DIR_OUT | USB_TYPE_VENDOR), 0, 0,
-			set_def_chn, sizeof(set_def_chn), USB_CTRL_SET_TIMEOUT);
-	return ret;
-}
-
 static void dlfb_dpy_deferred_io(struct fb_info *info,
 				struct list_head *pagelist)
 {
@@ -1125,6 +1109,21 @@ static struct fb_deferred_io dlfb_defio = {
 	.delay          = 5,
 	.deferred_io    = dlfb_dpy_deferred_io,
 };
+
+static int dlfb_select_std_channel(struct dlfb_data *dev)
+{
+	int ret;
+	u8 set_def_chn[] = {	0x57, 0xCD, 0xDC, 0xA7,
+				0x1C, 0x88, 0x5E, 0x15,
+				0x60, 0xFE, 0xC6, 0x97,
+				0x16, 0x3D, 0x47, 0xF2  };
+
+	ret = usb_control_msg(dev->udev, usb_sndctrlpipe(dev->udev, 0),
+			NR_USB_REQUEST_CHANNEL,
+			(USB_DIR_OUT | USB_TYPE_VENDOR), 0, 0,
+			set_def_chn, sizeof(set_def_chn), USB_CTRL_SET_TIMEOUT);
+	return ret;
+}
 
 static int dlfb_usb_probe(struct usb_interface *interface,
 			const struct usb_device_id *id)
