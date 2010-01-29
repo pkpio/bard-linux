@@ -1391,8 +1391,8 @@ static void dlfb_free_urb_list(struct dlfb_data *dev)
 	/* keep waiting and freeing, until we've got 'em all */
 	while (count--)
 	{
-		/* Timeout means a memory leak (during teardown) */
-		ret = down_timeout(&dev->urbs.limit_sem, HZ/2);
+		/* Timeout means a memory leak and/or fault */
+		ret = down_timeout(&dev->urbs.limit_sem, FREE_URB_TIMEOUT);
 		if (ret) {
 			BUG_ON(ret);
 			break;
@@ -1482,7 +1482,7 @@ static struct urb* dlfb_get_urb(struct dlfb_data *dev) {
 	unsigned long flags;
 
 	/* Wait for an in-flight buffer to complete and get re-queued */
-	ret = down_killable(&dev->urbs.limit_sem);
+	ret = down_timeout(&dev->urbs.limit_sem, GET_URB_TIMEOUT);
 	if (ret) {
 		atomic_set(&dev->lost_pixels, 1);
 		dl_err("wait for urb interrupted: %x\n", ret);

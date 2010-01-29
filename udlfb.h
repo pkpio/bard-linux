@@ -61,6 +61,9 @@ struct dlfb_data {
 #define MAX_TRANSFER (PAGE_SIZE*16 - BULK_SIZE)
 #define WRITES_IN_FLIGHT (4)
 
+#define GET_URB_TIMEOUT	HZ
+#define FREE_URB_TIMEOUT (HZ*2)
+
 #define BPP                     2
 #define MAX_CMD_PIXELS		255
 #define MIN_RLX_PIX_BYTES       4
