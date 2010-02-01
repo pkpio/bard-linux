@@ -37,6 +37,13 @@ static struct fb_fix_screeninfo dlfb_fix = {
 	.accel =        FB_ACCEL_NONE,
 };
 
+static const u32 udlfb_info_flags = FBINFO_DEFAULT | FBINFO_READS_FAST |
+#ifdef FBINFO_VIRTFB
+		FBINFO_VIRTFB |
+#endif
+		FBINFO_HWACCEL_IMAGEBLIT | FBINFO_HWACCEL_FILLRECT |
+		FBINFO_HWACCEL_COPYAREA | FBINFO_MISC_ALWAYS_SETPAR;
+
 /*
  * There are many DisplayLink-based products, all with unique PIDs. We are able
  * to support all volume ones (circa 2009) with a single driver, so we match
@@ -705,8 +712,8 @@ static int dlfb_ops_open(struct fb_info *info, int user)
  */
 	atomic_inc(&dev->fb_count);
 
-	dl_notice("open /dev/fb%d user=%d count=%d\n",
-		  info->node, user, atomic_read(&dev->fb_count));
+	dl_notice("open /dev/fb%d user=%d fb_info=%x count=%d\n",
+	    info->node, user, (unsigned int) info, atomic_read(&dev->fb_count));
 
 	return 0;
 }
@@ -816,6 +823,8 @@ static int dlfb_ops_check_var(struct fb_var_screeninfo *var,
 static int dlfb_ops_set_par(struct fb_info *info)
 {
 	struct dlfb_data *dev = info->par;
+
+	dl_notice("set_par mode %dx%d\n", info->var.xres, info->var.yres);
 
 	return dlfb_set_video_mode(dev, &info->var);
 }
@@ -1206,8 +1215,8 @@ static int dlfb_usb_probe(struct usb_interface *interface,
 	info->screen_base = videomemory;
 	info->fix.smem_len = PAGE_ALIGN(videomemorysize);
 	info->fix.smem_start = (unsigned long) videomemory;
-	info->flags =
-	    FBINFO_DEFAULT | FBINFO_READS_FAST | FBINFO_HWACCEL_IMAGEBLIT;
+	info->flags = udlfb_info_flags;
+
 
 	/*
 	 * Second framebuffer copy, mirroring the state of the framebuffer
