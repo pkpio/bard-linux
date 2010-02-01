@@ -574,8 +574,7 @@ static void dlfb_ops_copyarea(struct fb_info *info,
 
 	sys_copyarea(info, area);
 
-	if (atomic_read(&dev->defio_off))
-		dlfb_handle_damage(dev, area->dx, area->dy,
+	dlfb_handle_damage(dev, area->dx, area->dy,
 			area->width, area->height, info->screen_base);
 
 	atomic_inc(&dev->copy_count);
@@ -589,8 +588,7 @@ static void dlfb_ops_imageblit(struct fb_info *info,
 
 	sys_imageblit(info, image);
 
-	if (atomic_read(&dev->defio_off))
-		dlfb_handle_damage(dev, image->dx, image->dy,
+	dlfb_handle_damage(dev, image->dx, image->dy,
 			image->width, image->height, info->screen_base);
 
 	atomic_inc(&dev->blit_count);
@@ -603,8 +601,7 @@ static void dlfb_ops_fillrect(struct fb_info *info,
 
 	sys_fillrect(info, rect);
 
-	if (atomic_read(&dev->defio_off))
-		dlfb_handle_damage(dev, rect->dx, rect->dy, rect->width,
+	dlfb_handle_damage(dev, rect->dx, rect->dy, rect->width,
 			      rect->height, info->screen_base);
 
 	atomic_inc(&dev->fill_count);
@@ -705,11 +702,10 @@ static int dlfb_ops_open(struct fb_info *info, int user)
 {
 	struct dlfb_data *dev = info->par;
 
-/*
- * We could prevent fbcon from using the framebuffer here
- *	if (user == 0)
- *		return -EBUSY;
+/*	if (user == 0)
+ *		We could special case kernel mode clients (fbcon) here
  */
+
 	atomic_inc(&dev->fb_count);
 
 	dl_notice("open /dev/fb%d user=%d fb_info=%x count=%d\n",
@@ -727,7 +723,8 @@ static int dlfb_ops_release(struct fb_info *info, int user)
 	dl_notice("release /dev/fb%d user=%d count=%d\n",
 		  info->node, user, atomic_read(&dev->fb_count));
 
-	atomic_set(&dev->defio_off, 0);
+	if (!atomic_read(&dev->fb_count))
+		atomic_set(&dev->defio_off, 0);
 
 	return 0;
 }
