@@ -55,6 +55,20 @@ static struct usb_device_id id_table[] = {
 	{},
 };
 
+#ifndef CONFIG_FB_DEFERRED_IO
+#warning message "kernel FB_DEFFERRED_IO option to support generic fbdev apps"
+#endif
+
+#ifndef CONFIG_FB_SYS_IMAGEBLIT
+#ifndef CONFIG_FB_SYS_IMAGEBLIT_MODULE
+#warning message "FB_SYS_* in kernel or module option to support fb console"
+#endif
+#endif
+
+#ifndef CONFIG_FB_MODE_HELPERS
+#warning message "kernel FB_MODE_HELPERS required. Expect build break"
+#endif
+
 /* dlfb keeps a list of urbs for efficient bulk transfers */
 static void dlfb_urb_completion(struct urb *urb);
 static struct urb* dlfb_get_urb(struct dlfb_data *dev);
@@ -566,17 +580,20 @@ int dlfb_handle_damage(struct dlfb_data *dev, int x, int y,
 	return 0;
 }
 
+/* hardware has native COPY command (see libdlo), but not worth it for fbcon */
 static void dlfb_ops_copyarea(struct fb_info *info,
 				const struct fb_copyarea *area)
 {
 
 	struct dlfb_data *dev = info->par;
 
+#if defined CONFIG_FB_SYS_COPYAREA || defined CONFIG_FB_SYS_COPYAREA_MODULE
+
 	sys_copyarea(info, area);
 
 	dlfb_handle_damage(dev, area->dx, area->dy,
 			area->width, area->height, info->screen_base);
-
+#endif
 	atomic_inc(&dev->copy_count);
 
 }
@@ -586,10 +603,14 @@ static void dlfb_ops_imageblit(struct fb_info *info,
 {
 	struct dlfb_data *dev = info->par;
 
+#if defined CONFIG_FB_SYS_IMAGEBLIT || defined CONFIG_FB_SYS_IMAGEBLIT_MODULE
+
 	sys_imageblit(info, image);
 
 	dlfb_handle_damage(dev, image->dx, image->dy,
 			image->width, image->height, info->screen_base);
+
+#endif
 
 	atomic_inc(&dev->blit_count);
 }
@@ -599,10 +620,13 @@ static void dlfb_ops_fillrect(struct fb_info *info,
 {
 	struct dlfb_data *dev = info->par;
 
+#if defined CONFIG_FB_SYS_FILLRECT || defined CONFIG_FB_SYS_FILLRECT_MODULE
+
 	sys_fillrect(info, rect);
 
 	dlfb_handle_damage(dev, rect->dx, rect->dy, rect->width,
 			      rect->height, info->screen_base);
+#endif
 
 	atomic_inc(&dev->fill_count);
 
@@ -753,8 +777,9 @@ static void dlfb_ops_destroy(struct fb_info *info)
 {
 	struct dlfb_data *dev = info->par;
 
+#ifdef CONFIG_FB_DEFERRED_IO
 	fb_deferred_io_cleanup(info);
-
+#endif
 	if (info->cmap.len != 0)
 		fb_dealloc_cmap(&info->cmap);
 	if (info->monspecs.modedb)
@@ -1053,9 +1078,7 @@ static struct device_attribute fb_device_attrs[] = {
 	__ATTR(metrics_reset, S_IWUGO, NULL, metrics_reset_store),
 };
 
-/*
- * This is necessary before we can communicate with the display controller.
- */
+#ifdef CONFIG_FB_DEFERRED_IO
 static void dlfb_dpy_deferred_io(struct fb_info *info,
 				struct list_head *pagelist)
 {
@@ -1115,7 +1138,11 @@ static struct fb_deferred_io dlfb_defio = {
 	.delay          = 5,
 	.deferred_io    = dlfb_dpy_deferred_io,
 };
+#endif
 
+/*
+ * This is necessary before we can communicate with the display controller.
+ */
 static int dlfb_select_std_channel(struct dlfb_data *dev)
 {
 	int ret;
@@ -1249,10 +1276,11 @@ static int dlfb_usb_probe(struct usb_interface *interface,
 	dlfb_handle_damage(dev, 0, 0, info->var.xres, info->var.yres,
 				videomemory);
 
+#ifdef CONFIG_FB_DEFERRED_IO
 	/* enable defio */
 	info->fbdefio = &dlfb_defio;
 	fb_deferred_io_init(info);
-
+#endif
 	retval = register_framebuffer(info);
 	if (retval < 0) {
 		dl_err("register_framebuffer failed %d\n", retval);
