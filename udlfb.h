@@ -34,7 +34,7 @@ struct dlfb_data {
 	atomic_t fb_count;
 	atomic_t usb_active; /* 0 = update virtual buffer, but no usb traffic */
 	atomic_t lost_pixels; /* 1 = a render op failed. Need screen refresh */
-	atomic_t defio_off; /* 1 = rely on ioctls and blit/copy/fill rects */
+	atomic_t use_defio; /* 0 = rely on ioctls and blit/copy/fill rects */
 	char edid[128];
 	int sku_pixel_limit;
 	int base16;
@@ -72,6 +72,9 @@ struct dlfb_data {
 /* remove these once align.h patch is taken into kernel */
 #define DL_ALIGN_UP(x,a) ALIGN(x,a)
 #define DL_ALIGN_DOWN(x,a) ALIGN(x-(a-1), a)
+
+/* remove once this gets added to sysfs.h */
+#define __ATTR_RW(attr) __ATTR(attr, 0644, attr##_show, attr##_store)
 
 /* KERN_ERR level for now - we need easy debug/feedback from all users still */
 #define dl_err(format, arg...) \
