@@ -31,7 +31,8 @@ struct dlfb_data {
 	struct kref kref;
 	char *backing_buffer;
 	struct delayed_work deferred_work;
-	atomic_t fb_count;
+	struct mutex fb_open_lock;
+	int fb_count;
 	atomic_t usb_active; /* 0 = update virtual buffer, but no usb traffic */
 	atomic_t lost_pixels; /* 1 = a render op failed. Need screen refresh */
 	atomic_t use_defio; /* 0 = rely on ioctls and blit/copy/fill rects */

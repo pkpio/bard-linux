@@ -76,6 +76,11 @@ static int dlfb_submit_urb(struct dlfb_data *dev, struct urb * urb, size_t len);
 static int dlfb_alloc_urb_list(struct dlfb_data *dev, int count, size_t size);
 static void dlfb_free_urb_list(struct dlfb_data *dev);
 
+/* other symbols with dependents */
+#ifdef CONFIG_FB_DEFERRED_IO
+static struct fb_deferred_io dlfb_defio;
+#endif
+
 /*
  * All DisplayLink bulk operations start with 0xAF, followed by specific code
  * All operations are written to buffers which then later get sent to device
@@ -278,6 +283,39 @@ static int dlfb_set_video_mode(struct dlfb_data *dev,
 	retval = dlfb_submit_urb(dev, urb, writesize);
 
 	return retval;
+}
+
+static int dlfb_ops_mmap(struct fb_info *info, struct vm_area_struct *vma)
+{
+	unsigned long start = vma->vm_start;
+	unsigned long size = vma->vm_end - vma->vm_start;
+	unsigned long offset = vma->vm_pgoff << PAGE_SHIFT;
+	unsigned long page, pos;
+	struct dlfb_data *dev = info->par;
+
+	dl_notice("MMAP: %lu %u\n", offset + size, info->fix.smem_len);
+
+	if (offset + size > info->fix.smem_len)
+		return -EINVAL;
+
+	pos = (unsigned long)info->fix.smem_start + offset;
+
+	while (size > 0) {
+		page = vmalloc_to_pfn((void *)pos);
+		if (remap_pfn_range(vma, start, page, PAGE_SIZE, PAGE_SHARED))
+			return -EAGAIN;
+
+		start += PAGE_SIZE;
+		pos += PAGE_SIZE;
+		if (size > PAGE_SIZE)
+			size -= PAGE_SIZE;
+		else
+			size = 0;
+	}
+
+	vma->vm_flags |= (VM_RESERVED | VM_DONTEXPAND);
+	return 0;
+
 }
 
 /* ioctl structure */
@@ -722,6 +760,10 @@ dlfb_ops_setcolreg(unsigned regno, unsigned red, unsigned green,
 	return err;
 }
 
+/*
+ * It's common for several clients to have framebuffer open simultaneously.
+ * e.g. both fbcon and X. Makes things interesting.
+ */
 static int dlfb_ops_open(struct fb_info *info, int user)
 {
 	struct dlfb_data *dev = info->par;
@@ -730,10 +772,22 @@ static int dlfb_ops_open(struct fb_info *info, int user)
  *		We could special case kernel mode clients (fbcon) here
  */
 
-	atomic_inc(&dev->fb_count);
+	mutex_lock(&dev->fb_open_lock);
+
+	dev->fb_count++;
+
+#ifdef CONFIG_FB_DEFERRED_IO
+	if ((atomic_read(&dev->use_defio)) && (info->fbdefio == NULL)) {
+		/* enable defio */
+		info->fbdefio = &dlfb_defio;
+		fb_deferred_io_init(info);
+	}
+#endif
 
 	dl_notice("open /dev/fb%d user=%d fb_info=%x count=%d\n",
-	    info->node, user, (unsigned int) info, atomic_read(&dev->fb_count));
+	    info->node, user, (unsigned int) info, dev->fb_count);
+
+	mutex_unlock(&dev->fb_open_lock);
 
 	return 0;
 }
@@ -742,10 +796,22 @@ static int dlfb_ops_release(struct fb_info *info, int user)
 {
 	struct dlfb_data *dev = info->par;
 
-	atomic_dec(&dev->fb_count);
+	mutex_lock(&dev->fb_open_lock);
+
+	dev->fb_count--;
+
+#ifdef CONFIG_FB_DEFERRED_IO
+	if ((dev->fb_count == 0) && (info->fbdefio)) {
+		fb_deferred_io_cleanup(info);
+		info->fbdefio = NULL;
+		info->fbops->fb_mmap = dlfb_ops_mmap;
+	}
+#endif
 
 	dl_notice("release /dev/fb%d user=%d count=%d\n",
-		  info->node, user, atomic_read(&dev->fb_count));
+		  info->node, user, dev->fb_count);
+
+	mutex_unlock(&dev->fb_open_lock);
 
 	return 0;
 }
@@ -763,6 +829,8 @@ static void dlfb_delete(struct kref *kref)
 		vfree(dev->backing_buffer);
 	}
 
+	mutex_destroy(&dev->fb_open_lock);
+
 	kfree(dev);
 }
 
@@ -774,9 +842,6 @@ static void dlfb_ops_destroy(struct fb_info *info)
 {
 	struct dlfb_data *dev = info->par;
 
-#ifdef CONFIG_FB_DEFERRED_IO
-	fb_deferred_io_cleanup(info);
-#endif
 	if (info->cmap.len != 0)
 		fb_dealloc_cmap(&info->cmap);
 	if (info->monspecs.modedb)
@@ -883,6 +948,7 @@ static struct fb_ops fbops = {
 	.fb_fillrect = dlfb_ops_fillrect,
 	.fb_copyarea = dlfb_ops_copyarea,
 	.fb_imageblit = dlfb_ops_imageblit,
+	.fb_mmap = dlfb_ops_mmap,
 	.fb_ioctl = dlfb_ops_ioctl,
 	.fb_open = dlfb_ops_open,
 	.fb_release = dlfb_ops_release,
@@ -1011,7 +1077,7 @@ static ssize_t metrics_misc_show(struct device *fbdev,
 			atomic_read(&dev->defio_fault_count),
 			atomic_read(&dev->copy_count),
 			atomic_read(&dev->fill_count),
-			atomic_read(&dev->fb_count),
+			dev->fb_count,
 			dev->urbs.available, dev->urbs.limit_sem.count,
 			(dev->backing_buffer) ? "yes" : "no",
 			atomic_read(&dev->lost_pixels) ? "yes" : "no");
@@ -1160,6 +1226,7 @@ static struct fb_deferred_io dlfb_defio = {
 	.delay          = 5,
 	.deferred_io    = dlfb_dpy_deferred_io,
 };
+
 #endif
 
 /*
@@ -1217,6 +1284,8 @@ static int dlfb_usb_probe(struct usb_interface *interface,
 		dl_err("dlfb_alloc_urb_list failed\n");
 		goto error;
 	}
+
+	mutex_init(&dev->fb_open_lock);
 
 	/* We don't register a new USB class. Our client interface is fbdev */
 
@@ -1301,12 +1370,6 @@ static int dlfb_usb_probe(struct usb_interface *interface,
 	}
 	dlfb_handle_damage(dev, 0, 0, info->var.xres, info->var.yres,
 				videomemory);
-
-#ifdef CONFIG_FB_DEFERRED_IO
-	/* enable defio */
-	info->fbdefio = &dlfb_defio;
-	fb_deferred_io_init(info);
-#endif
 
 	retval = register_framebuffer(info);
 	if (retval < 0) {
