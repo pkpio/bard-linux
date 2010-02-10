@@ -397,6 +397,7 @@ static void dlfb_compress_hline(
 	const uint16_t* pixel = *pixel_start_ptr;
 	uint32_t dev_addr  = *device_address_ptr;
 	uint8_t* cmd = *command_buffer_ptr;
+	const int bpp = 2;
 
 	while ((pixel_end > pixel) &&
 	       (cmd_buffer_end - MIN_RLX_CMD_BYTES > cmd))
@@ -405,7 +406,7 @@ static void dlfb_compress_hline(
 		uint8_t *cmd_pixels_count_byte = 0;
 		const uint16_t *raw_pixel_start = 0;
 		const uint16_t *cmd_pixel_start, *cmd_pixel_end = 0;
-		const uint32_t be_dev_addr = htonl(dev_addr);
+		const uint32_t be_dev_addr = cpu_to_be32(dev_addr);
 
 		*cmd++ = 0xAF;
 		*cmd++ = 0x6B;
@@ -420,55 +421,39 @@ static void dlfb_compress_hline(
 		raw_pixel_start = pixel;
 
 		cmd_pixel_end = pixel +
-			min(pixel_end - pixel, MAX_CMD_PIXELS + 1);
+			min(pixel_end - pixel, min(MAX_CMD_PIXELS + 1,
+			(cmd_buffer_end - cmd) / bpp));
 
-		while ((pixel < cmd_pixel_end) &&
-		       (cmd_buffer_end - MIN_RLX_PIX_BYTES > cmd))
+		prefetch_range((void*) pixel, (cmd_pixel_end - pixel) * bpp);
+
+		while (pixel < cmd_pixel_end)
 		{
 			const uint16_t* const repeating_pixel = pixel;
-			const uint16_t be_pixel = htons(*pixel);
 
-			*cmd++ = (be_pixel) & 0xFF;
-			*cmd++ = (be_pixel >> 8) & 0xFF;
+			*(uint16_t*)cmd = cpu_to_be16p(pixel);
+			cmd += 2;
 			pixel++;
 
-			while ((pixel < cmd_pixel_end)
-			       && (*pixel == *repeating_pixel))
+			if (unlikely((pixel < cmd_pixel_end) &&
+				     (*pixel == *repeating_pixel)))
 			{
-				pixel++;
-			}
-
-			if (pixel > repeating_pixel + 2)
-			{
-				/* We've got (to the end of) an RLE span worth
-				 * encoding go back and finalize length of last
-				 * raw span
-				 */
-
+				/* go back and fill in raw pixel count */
 				*raw_pixels_count_byte = ((repeating_pixel -
 						raw_pixel_start) + 1) & 0xFF;
-				/*
-				 * Immediately following the end of raw data
-				 * is a byte telling how many additional times
-				 * to repeat the last raw pixel
-				 */
-				 *cmd++ = ((pixel - repeating_pixel)-1) & 0xFF;
 
-				 /* Start a new raw span */
-				 raw_pixel_start = pixel;
+				while ((pixel < cmd_pixel_end)
+				       && (*pixel == *repeating_pixel))
+				{
+					pixel++;
+				}
 
-				 /*
-				  * hardware expects next byte to be number of
-				  * raw pixels in the next span. We don't know
-				  * that yet, fill in later
-				  */
-				 raw_pixels_count_byte = cmd++;
+				/* immediately after raw data is repeat byte */
+				*cmd++ = ((pixel - repeating_pixel) - 1) & 0xFF;
 
-			} else {
-				/* Back up and process as raw pixels */
-				pixel = repeating_pixel + 1;
+				/* Then start another raw pixel span */
+				raw_pixel_start = pixel;
+				raw_pixels_count_byte = cmd++;
 			}
-
 		}
 
 		if (pixel > raw_pixel_start)
@@ -478,7 +463,7 @@ static void dlfb_compress_hline(
 		}
 
 		*cmd_pixels_count_byte = (pixel - cmd_pixel_start) & 0xFF;
-		dev_addr += (pixel - cmd_pixel_start) * 2;
+		dev_addr += (pixel - cmd_pixel_start) * bpp;
 	}
 
 	if (cmd_buffer_end <= MIN_RLX_CMD_BYTES + cmd)
