@@ -342,6 +342,9 @@ static int dlfb_trim_hline(const u8* bback, const u8 **bfront, int *width_bytes)
 	int start = width;
 	int end = width;
 
+	prefetch((void*) front);
+	prefetch((void*) back);
+
 	for (j = 0; j < width; j++)
 	{
 		if (back[j] != front[j])
@@ -407,6 +410,8 @@ static void dlfb_compress_hline(
 		const uint16_t *raw_pixel_start = 0;
 		const uint16_t *cmd_pixel_start, *cmd_pixel_end = 0;
 		const uint32_t be_dev_addr = cpu_to_be32(dev_addr);
+
+		prefetchw((void*) cmd); /* pull in one cache line at least */
 
 		*cmd++ = 0xAF;
 		*cmd++ = 0x6B;
