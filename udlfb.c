@@ -325,35 +325,6 @@ struct dloarea {
 	int x2, y2;
 };
 
-/* thanks to Henrik Bjerregaard Pedersen for this function */
-static u8 *rle_compress16(const u16 *src, const u16 * const src_end,
-				u8 *dst, const u8 *dst_end)
-{
-	const char bpp = 2;
-
-	dst += RLE_HEADER_BYTES;  /* header will be filled in if worth it */
-
-	prefetch_range((void*) src, (src_end - src) * bpp);
-	prefetchw(dst); /* at least get first cache line */
-
-	while ((src < src_end) && (dst < dst_end)) {
-
-		const u16 * const start = src;
-		const u16 pix0 = *src++;
-
-		while ((src < src_end) && (*src == pix0))
-			src++;
-
-		*dst++ = (src-start);
-		*(u16*)dst = cpu_to_be16(pix0);
-		dst += 2;
-	}
-
-	return dst;
-}
-
-
-
 /*
  * Trims identical data from front and back of line
  * Sets new front buffer address and width
@@ -393,6 +364,35 @@ static int dlfb_trim_hline(const u8 *bback, const u8 **bfront, int *width_bytes)
 	*width_bytes = (end - start) * sizeof(unsigned long);
 
 	return (identical * sizeof(unsigned long));
+}
+
+#ifdef UDLFB_RL_RAW_COMPRESSION
+
+/* thanks to Henrik Bjerregaard Pedersen for this function */
+static u8 *rle_compress16(const u16 *src, const u16 * const src_end,
+				u8 *dst, const u8 *dst_end)
+{
+	const char bpp = 2;
+
+	dst += RLE_HEADER_BYTES;  /* header will be filled in if worth it */
+
+	prefetch_range((void*) src, (src_end - src) * bpp);
+	prefetchw(dst); /* at least get first cache line */
+
+	while ((src < src_end) && (dst < dst_end)) {
+
+		const u16 * const start = src;
+		const u16 pix0 = *src++;
+
+		while ((src < src_end) && (*src == pix0))
+			src++;
+
+		*dst++ = (src-start);
+		*(u16*)dst = cpu_to_be16(pix0);
+		dst += 2;
+	}
+
+	return dst;
 }
 
 /*
