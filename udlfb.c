@@ -531,9 +531,9 @@ static void dlfb_compress_hline(
 		raw_pixels_count_byte = cmd++; /*  we'll know this later */
 		raw_pixel_start = pixel;
 
-		cmd_pixel_end = pixel +
-			min(pixel_end - pixel, min(MAX_CMD_PIXELS + 1,
-			(cmd_buffer_end - cmd) / bpp));
+		cmd_pixel_end = pixel + min(MAX_CMD_PIXELS + 1,
+			min((int)(pixel_end - pixel),
+			    (int)(cmd_buffer_end - cmd) / bpp));
 
 		prefetch_range((void*) pixel, (cmd_pixel_end - pixel) * bpp);
 
@@ -877,8 +877,8 @@ static int dlfb_ops_open(struct fb_info *info, int user)
 	}
 #endif
 
-	dl_notice("open /dev/fb%d user=%d fb_info=%x count=%d\n",
-	    info->node, user, (unsigned int) info, dev->fb_count);
+	dl_notice("open /dev/fb%d user=%d fb_info=%p count=%d\n",
+	    info->node, user, info, dev->fb_count);
 
 	mutex_unlock(&dev->fb_open_lock);
 
