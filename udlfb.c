@@ -589,7 +589,7 @@ static void dlfb_render_hline(struct dlfb_data *dev, struct urb **urb_ptr,
 			      u32 byte_offset, u32 byte_width,
 			      int *ident_ptr, int *sent_ptr)
 {
-	const u8 *line_start, *line_end, *next_pixel, *back_start;
+	const u8 *line_start, *line_end, *next_pixel;
 	u32 dev_addr = dev->base16 + byte_offset;
 	struct urb *urb = *urb_ptr;
 	u8* cmd = *urb_buf_ptr;
@@ -597,11 +597,12 @@ static void dlfb_render_hline(struct dlfb_data *dev, struct urb **urb_ptr,
 
 	line_start = (u8 *) (front + byte_offset);
 	next_pixel = line_start;
-	line_end = &line_start[byte_width+1];
-	back_start = (u8 *) (dev->backing_buffer + byte_offset);
+	line_end = next_pixel + byte_width;
 
 	if (dev->backing_buffer) {
 		int offset;
+		const u8 *back_start = (u8 *) (dev->backing_buffer
+						+ byte_offset);
 
 		*ident_ptr += dlfb_trim_hline(back_start, &next_pixel,
 			&byte_width);
@@ -611,6 +612,9 @@ static void dlfb_render_hline(struct dlfb_data *dev, struct urb **urb_ptr,
 		dev_addr += offset;
 		back_start += offset;
 		line_start += offset;
+
+		memcpy((char*)back_start, (char*) line_start,
+		       byte_width);
 	}
 
 	while (next_pixel < line_end) {
@@ -632,10 +636,6 @@ static void dlfb_render_hline(struct dlfb_data *dev, struct urb **urb_ptr,
 			cmd_end = &cmd[urb->transfer_buffer_length];
 		}
 	}
-
-	if (dev->backing_buffer)
-		memcpy((char*)back_start, (char*) line_start,
-		       byte_width);
 
 	*urb_buf_ptr = cmd;
 }
