@@ -67,8 +67,18 @@ struct dlfb_data {
 
 #define BPP                     2
 #define MAX_CMD_PIXELS		255
+
+#define RLX_HEADER_BYTES	7
 #define MIN_RLX_PIX_BYTES       4
-#define MIN_RLX_CMD_BYTES	(7 + MIN_RLX_PIX_BYTES)
+#define MIN_RLX_CMD_BYTES	(RLX_HEADER_BYTES + MIN_RLX_PIX_BYTES)
+
+#define RLE_HEADER_BYTES	6
+#define MIN_RLE_PIX_BYTES	3
+#define MIN_RLE_CMD_BYTES	(RLE_HEADER_BYTES + MIN_RLE_PIX_BYTES)
+
+#define RAW_HEADER_BYTES	6
+#define MIN_RAW_PIX_BYTES	2
+#define MIN_RAW_CMD_BYTES	(RAW_HEADER_BYTES + MIN_RAW_PIX_BYTES)
 
 /* remove these once align.h patch is taken into kernel */
 #define DL_ALIGN_UP(x,a) ALIGN(x,a)

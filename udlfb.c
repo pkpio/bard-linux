@@ -325,6 +325,35 @@ struct dloarea {
 	int x2, y2;
 };
 
+/* thanks to Henrik Bjerregaard Pedersen for this function */
+static u8 *rle_compress16(const u16 *src, const u16 * const src_end,
+				u8 *dst, const u8 *dst_end)
+{
+	const char bpp = 2;
+
+	dst += RLE_HEADER_BYTES;  /* header will be filled in if worth it */
+
+	prefetch_range((void*) src, (src_end - src) * bpp);
+	prefetchw(dst); /* at least get first cache line */
+
+	while ((src < src_end) && (dst < dst_end)) {
+
+		const u16 * const start = src;
+		const u16 pix0 = *src++;
+
+		while ((src < src_end) && (*src == pix0))
+			src++;
+
+		*dst++ = (src-start);
+		*(u16*)dst = cpu_to_be16(pix0);
+		dst += 2;
+	}
+
+	return dst;
+}
+
+
+
 /*
  * Trims identical data from front and back of line
  * Sets new front buffer address and width
@@ -332,7 +361,7 @@ struct dloarea {
  * Assumes CPU natural alignment (unsigned long)
  * for back and front buffer ptrs and width
  */
-static int dlfb_trim_hline(const u8* bback, const u8 **bfront, int *width_bytes)
+static int dlfb_trim_hline(const u8 *bback, const u8 **bfront, int *width_bytes)
 {
 	int j, k;
 	const unsigned long *back = (const unsigned long *) bback;
@@ -345,19 +374,15 @@ static int dlfb_trim_hline(const u8* bback, const u8 **bfront, int *width_bytes)
 	prefetch((void*) front);
 	prefetch((void*) back);
 
-	for (j = 0; j < width; j++)
-	{
-		if (back[j] != front[j])
-		{
+	for (j = 0; j < width; j++) {
+		if (back[j] != front[j]) {
 			start = j;
 			break;
 		}
 	}
 
-	for (k = width - 1; k > j; k--)
-	{
-		if (back[k] != front[k])
-		{
+	for (k = width - 1; k > j; k--) {
+		if (back[k] != front[k]) {
 			end = k+1;
 			break;
 		}
@@ -378,7 +403,6 @@ It always begins with a fresh command header
 (the protocol doesn't require this, but we enforce it to allow
 multiple buffers to be potentially encoded and sent in parallel).
 A single command encodes one contiguous horizontal line of pixels
-In the form of spans of raw and RLE-encoded pixels.
 
 The function relies on the client to do all allocation, so that
 rendering can be done directly to output buffers (e.g. USB URBs).
@@ -391,20 +415,91 @@ regardless of the compression ratio (protocol design limit).
 To the hardware, 0 for a size byte means 256
 */
 static void dlfb_compress_hline(
-	const uint16_t* *pixel_start_ptr,
-	const uint16_t*	const pixel_end,
+	const uint16_t **pixel_start_ptr,
+	const uint16_t *const pixel_end,
 	uint32_t *device_address_ptr,
-	uint8_t* *command_buffer_ptr,
-	const uint8_t* const cmd_buffer_end)
+	uint8_t **command_buffer_ptr,
+	const uint8_t *const cmd_buffer_end)
 {
-	const uint16_t* pixel = *pixel_start_ptr;
+	const uint16_t *pixel = *pixel_start_ptr;
 	uint32_t dev_addr  = *device_address_ptr;
-	uint8_t* cmd = *command_buffer_ptr;
+	uint8_t *cmd = *command_buffer_ptr;
+	const int bpp = 2;
+	const uint16_t *cmd_pixel_start, *cmd_pixel_end = 0;
+	uint32_t be_dev_addr;
+	uint8_t *rle_cmd_end, *raw_cmd_end;
+	int rem;
+
+	while ((pixel < pixel_end) &&
+	       (cmd < cmd_buffer_end - MIN_RLE_CMD_BYTES)) {
+
+		rem = min(pixel_end - pixel, min(MAX_CMD_PIXELS,
+			 (cmd_buffer_end - cmd - RLE_HEADER_BYTES) / bpp));
+
+		cmd_pixel_start = pixel;
+		cmd_pixel_end = pixel + rem;
+
+		prefetch_range((void*) pixel, rem * bpp);
+
+		raw_cmd_end = cmd + RAW_HEADER_BYTES + (rem * bpp);
+
+		/* optimistically assume rle will provide some compression */
+		rle_cmd_end = rle_compress16(cmd_pixel_start, cmd_pixel_end,
+						cmd, raw_cmd_end);
+
+		/* fill in the header elements common to rle and raw */
+		cmd[0] = 0xAF;
+		be_dev_addr = cpu_to_be32(dev_addr);
+		cmd[2] = (uint8_t) ((be_dev_addr >> 8) & 0xFF);
+		cmd[3] = (uint8_t) ((be_dev_addr >> 16) & 0xFF);
+		cmd[4] = (uint8_t) ((be_dev_addr >> 24) & 0xFF);
+		cmd[5] = rem & 0xFF;
+
+		/* go with the better method (overwriting rle data if raw) */
+		if (rle_cmd_end < raw_cmd_end) {
+			cmd[1] = 0x69;
+			cmd = rle_cmd_end;
+			pixel = cmd_pixel_end;
+		} else {
+			cmd[1] = 0x68;
+			cmd = &cmd[6];
+			for (;pixel < cmd_pixel_end; pixel++) {
+				*(uint16_t*) cmd = cpu_to_be16p(pixel);
+				cmd += 2;
+			}
+		}
+
+		dev_addr += (pixel - cmd_pixel_start) * bpp;
+	}
+
+	if (cmd >= cmd_buffer_end - MIN_RLE_CMD_BYTES) {
+		/* Fill leftover bytes with no-ops */
+		if (cmd < cmd_buffer_end)
+			memset(cmd, 0xAF, cmd_buffer_end - cmd);
+		cmd = (uint8_t*) cmd_buffer_end;
+	}
+
+	*command_buffer_ptr = cmd;
+	*pixel_start_ptr = pixel;
+	*device_address_ptr = dev_addr;
+
+	return;
+}
+
+static void dlfb_compress_hline_rlx(
+	const uint16_t **pixel_start_ptr,
+	const uint16_t *const pixel_end,
+	uint32_t *device_address_ptr,
+	uint8_t **command_buffer_ptr,
+	const uint8_t *const cmd_buffer_end)
+{
+	const uint16_t *pixel = *pixel_start_ptr;
+	uint32_t dev_addr  = *device_address_ptr;
+	uint8_t *cmd = *command_buffer_ptr;
 	const int bpp = 2;
 
 	while ((pixel_end > pixel) &&
-	       (cmd_buffer_end - MIN_RLX_CMD_BYTES > cmd))
-	{
+	       (cmd_buffer_end - MIN_RLX_CMD_BYTES > cmd)) {
 		uint8_t *raw_pixels_count_byte = 0;
 		uint8_t *cmd_pixels_count_byte = 0;
 		const uint16_t *raw_pixel_start = 0;
@@ -431,24 +526,21 @@ static void dlfb_compress_hline(
 
 		prefetch_range((void*) pixel, (cmd_pixel_end - pixel) * bpp);
 
-		while (pixel < cmd_pixel_end)
-		{
-			const uint16_t* const repeating_pixel = pixel;
+		while (pixel < cmd_pixel_end) {
+			const uint16_t * const repeating_pixel = pixel;
 
 			*(uint16_t*)cmd = cpu_to_be16p(pixel);
 			cmd += 2;
 			pixel++;
 
 			if (unlikely((pixel < cmd_pixel_end) &&
-				     (*pixel == *repeating_pixel)))
-			{
+				     (*pixel == *repeating_pixel))) {
 				/* go back and fill in raw pixel count */
 				*raw_pixels_count_byte = ((repeating_pixel -
 						raw_pixel_start) + 1) & 0xFF;
 
 				while ((pixel < cmd_pixel_end)
-				       && (*pixel == *repeating_pixel))
-				{
+				       && (*pixel == *repeating_pixel)) {
 					pixel++;
 				}
 
@@ -461,8 +553,7 @@ static void dlfb_compress_hline(
 			}
 		}
 
-		if (pixel > raw_pixel_start)
-		{
+		if (pixel > raw_pixel_start) {
 			/* finalize last RAW span */
 			*raw_pixels_count_byte = (pixel-raw_pixel_start) & 0xFF;
 		}
@@ -471,14 +562,14 @@ static void dlfb_compress_hline(
 		dev_addr += (pixel - cmd_pixel_start) * bpp;
 	}
 
-	if (cmd_buffer_end <= MIN_RLX_CMD_BYTES + cmd)
-	{
+	if (cmd_buffer_end <= MIN_RLX_CMD_BYTES + cmd) {
 		/* Fill leftover bytes with no-ops */
 		if (cmd_buffer_end > cmd)
 			memset(cmd, 0xAF, cmd_buffer_end - cmd);
 		cmd = (uint8_t*) cmd_buffer_end;
 	}
 
+	BUG_ON(*command_buffer_ptr == cmd); /* we must make progress */
 	*command_buffer_ptr = cmd;
 	*pixel_start_ptr = pixel;
 	*device_address_ptr = dev_addr;
