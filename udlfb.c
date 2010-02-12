@@ -580,7 +580,6 @@ static void dlfb_compress_hline(
 		cmd = (uint8_t*) cmd_buffer_end;
 	}
 
-	BUG_ON(*command_buffer_ptr == cmd); /* we must make progress */
 	*command_buffer_ptr = cmd;
 	*pixel_start_ptr = pixel;
 	*device_address_ptr = dev_addr;
@@ -588,6 +587,7 @@ static void dlfb_compress_hline(
 	return;
 }
 
+#endif
 
 /*
  * There are 3 copies of every pixel: The front buffer that the fbdev
@@ -817,6 +817,7 @@ static int dlfb_ops_ioctl(struct fb_info *info, unsigned int cmd,
 			area->y = info->var.yres;
 
 		atomic_set(&dev->use_defio, 0);
+
 		dlfb_handle_damage(dev, area->x, area->y, area->w, area->h,
 			   info->screen_base);
 		atomic_inc(&dev->damage_count);
