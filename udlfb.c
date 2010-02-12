@@ -71,7 +71,7 @@ static struct usb_device_id id_table[] = {
 
 /* dlfb keeps a list of urbs for efficient bulk transfers */
 static void dlfb_urb_completion(struct urb *urb);
-static struct urb* dlfb_get_urb(struct dlfb_data *dev);
+static struct urb *dlfb_get_urb(struct dlfb_data *dev);
 static int dlfb_submit_urb(struct dlfb_data *dev, struct urb * urb, size_t len);
 static int dlfb_alloc_urb_list(struct dlfb_data *dev, int count, size_t size);
 static void dlfb_free_urb_list(struct dlfb_data *dev);
@@ -260,7 +260,7 @@ static int dlfb_set_video_mode(struct dlfb_data *dev,
 	urb = dlfb_get_urb(dev);
 	if (!urb)
 		return -ENOMEM;
-	buf = (char*) urb->transfer_buffer;
+	buf = (char *) urb->transfer_buffer;
 
 	/*
 	* This first section has to do with setting the base address on the
@@ -342,8 +342,8 @@ static int dlfb_trim_hline(const u8 *bback, const u8 **bfront, int *width_bytes)
 	int start = width;
 	int end = width;
 
-	prefetch((void*) front);
-	prefetch((void*) back);
+	prefetch((void *) front);
+	prefetch((void *) back);
 
 	for (j = 0; j < width; j++) {
 		if (back[j] != front[j]) {
@@ -360,10 +360,10 @@ static int dlfb_trim_hline(const u8 *bback, const u8 **bfront, int *width_bytes)
 	}
 
 	identical = start + (width - end);
-	*bfront = (u8*) &front[start];
+	*bfront = (u8 *) &front[start];
 	*width_bytes = (end - start) * sizeof(unsigned long);
 
-	return (identical * sizeof(unsigned long));
+	return identical * sizeof(unsigned long);
 }
 
 #ifdef UDLFB_RL_RAW_COMPRESSION
@@ -376,7 +376,7 @@ static u8 *rle_compress16(const u16 *src, const u16 * const src_end,
 
 	dst += RLE_HEADER_BYTES;  /* header will be filled in if worth it */
 
-	prefetch_range((void*) src, (src_end - src) * bpp);
+	prefetch_range((void *) src, (src_end - src) * bpp);
 	prefetchw(dst); /* at least get first cache line */
 
 	while ((src < src_end) && (dst < dst_end)) {
@@ -388,7 +388,7 @@ static u8 *rle_compress16(const u16 *src, const u16 * const src_end,
 			src++;
 
 		*dst++ = (src-start);
-		*(u16*)dst = cpu_to_be16(pix0);
+		*(u16 *)dst = cpu_to_be16(pix0);
 		dst += 2;
 	}
 
@@ -439,7 +439,7 @@ static void dlfb_compress_hline(
 		cmd_pixel_start = pixel;
 		cmd_pixel_end = pixel + rem;
 
-		prefetch_range((void*) pixel, rem * bpp);
+		prefetch_range((void *) pixel, rem * bpp);
 
 		raw_cmd_end = cmd + RAW_HEADER_BYTES + (rem * bpp);
 
@@ -463,8 +463,8 @@ static void dlfb_compress_hline(
 		} else {
 			cmd[1] = 0x68;
 			cmd = &cmd[6];
-			for (;pixel < cmd_pixel_end; pixel++) {
-				*(uint16_t*) cmd = cpu_to_be16p(pixel);
+			for (; pixel < cmd_pixel_end; pixel++) {
+				*(uint16_t *) cmd = cpu_to_be16p(pixel);
 				cmd += 2;
 			}
 		}
@@ -476,7 +476,7 @@ static void dlfb_compress_hline(
 		/* Fill leftover bytes with no-ops */
 		if (cmd < cmd_buffer_end)
 			memset(cmd, 0xAF, cmd_buffer_end - cmd);
-		cmd = (uint8_t*) cmd_buffer_end;
+		cmd = (uint8_t *) cmd_buffer_end;
 	}
 
 	*command_buffer_ptr = cmd;
@@ -517,7 +517,7 @@ static void dlfb_compress_hline(
 		const uint16_t *cmd_pixel_start, *cmd_pixel_end = 0;
 		const uint32_t be_dev_addr = cpu_to_be32(dev_addr);
 
-		prefetchw((void*) cmd); /* pull in one cache line at least */
+		prefetchw((void *) cmd); /* pull in one cache line at least */
 
 		*cmd++ = 0xAF;
 		*cmd++ = 0x6B;
@@ -535,12 +535,12 @@ static void dlfb_compress_hline(
 			min((int)(pixel_end - pixel),
 			    (int)(cmd_buffer_end - cmd) / bpp));
 
-		prefetch_range((void*) pixel, (cmd_pixel_end - pixel) * bpp);
+		prefetch_range((void *) pixel, (cmd_pixel_end - pixel) * bpp);
 
 		while (pixel < cmd_pixel_end) {
 			const uint16_t * const repeating_pixel = pixel;
 
-			*(uint16_t*)cmd = cpu_to_be16p(pixel);
+			*(uint16_t *)cmd = cpu_to_be16p(pixel);
 			cmd += 2;
 			pixel++;
 
@@ -577,7 +577,7 @@ static void dlfb_compress_hline(
 		/* Fill leftover bytes with no-ops */
 		if (cmd_buffer_end > cmd)
 			memset(cmd, 0xAF, cmd_buffer_end - cmd);
-		cmd = (uint8_t*) cmd_buffer_end;
+		cmd = (uint8_t *) cmd_buffer_end;
 	}
 
 	*command_buffer_ptr = cmd;
@@ -603,8 +603,8 @@ static void dlfb_render_hline(struct dlfb_data *dev, struct urb **urb_ptr,
 	const u8 *line_start, *line_end, *next_pixel;
 	u32 dev_addr = dev->base16 + byte_offset;
 	struct urb *urb = *urb_ptr;
-	u8* cmd = *urb_buf_ptr;
-	u8* cmd_end = (u8*) urb->transfer_buffer + urb->transfer_buffer_length;
+	u8 *cmd = *urb_buf_ptr;
+	u8 *cmd_end = (u8 *) urb->transfer_buffer + urb->transfer_buffer_length;
 
 	line_start = (u8 *) (front + byte_offset);
 	next_pixel = line_start;
@@ -624,18 +624,18 @@ static void dlfb_render_hline(struct dlfb_data *dev, struct urb **urb_ptr,
 		back_start += offset;
 		line_start += offset;
 
-		memcpy((char*)back_start, (char*) line_start,
+		memcpy((char *)back_start, (char *) line_start,
 		       byte_width);
 	}
 
 	while (next_pixel < line_end) {
 
-		dlfb_compress_hline((const uint16_t**) &next_pixel,
-			     (const uint16_t*) line_end, &dev_addr,
-			(u8**) &cmd, (u8*) cmd_end);
+		dlfb_compress_hline((const uint16_t **) &next_pixel,
+			     (const uint16_t *) line_end, &dev_addr,
+			(u8 **) &cmd, (u8 *) cmd_end);
 
 		if (cmd >= cmd_end) {
-			int len = cmd - (u8*) urb->transfer_buffer;
+			int len = cmd - (u8 *) urb->transfer_buffer;
 			if (dlfb_submit_urb(dev, urb, len))
 				return; /* lost pixels is set */
 			*sent_ptr += len;
@@ -685,15 +685,14 @@ int dlfb_handle_damage(struct dlfb_data *dev, int x, int y,
 		const int line_offset = dev->info->fix.line_length * i;
 		const int byte_offset = line_offset + (x * BPP);
 
-		dlfb_render_hline(dev, &urb, (char*) dev->info->fix.smem_start,
+		dlfb_render_hline(dev, &urb, (char *) dev->info->fix.smem_start,
 				  &cmd, byte_offset, width * BPP,
 				  &bytes_identical, &bytes_sent);
 	}
 
-	if (cmd > (char*) urb->transfer_buffer)
-	{
+	if (cmd > (char *) urb->transfer_buffer) {
 		/* Send partial buffer remaining before exiting */
-		int len = cmd - (char*) urb->transfer_buffer;
+		int len = cmd - (char *) urb->transfer_buffer;
 		ret = dlfb_submit_urb(dev, urb, len);
 		bytes_sent += len;
 	} else
@@ -793,9 +792,8 @@ static int dlfb_ops_ioctl(struct fb_info *info, unsigned int cmd,
 	if (cmd == DLFB_IOCTL_RETURN_EDID) {
 		char *edid = (char *)arg;
 		dlfb_get_edid(dev);
-		if (copy_to_user(edid, dev->edid, sizeof(dev->edid))) {
+		if (copy_to_user(edid, dev->edid, sizeof(dev->edid)))
 			return -EFAULT;
-		}
 		return 0;
 	}
 
@@ -918,9 +916,8 @@ static void dlfb_delete(struct kref *kref)
 {
 	struct dlfb_data *dev = container_of(kref, struct dlfb_data, kref);
 
-	if (dev->backing_buffer) {
+	if (dev->backing_buffer)
 		vfree(dev->backing_buffer);
-	}
 
 	mutex_destroy(&dev->fb_open_lock);
 
@@ -1016,7 +1013,7 @@ static int dlfb_ops_blank(int blank_mode, struct fb_info *info)
 	urb = dlfb_get_urb(dev);
 	if (!urb)
 		return 0;
-	bufptr = (char*) urb->transfer_buffer;
+	bufptr = (char *) urb->transfer_buffer;
 
 	/* overloading usb_active.  UNBLANK can conflict with teardown */
 
@@ -1030,7 +1027,7 @@ static int dlfb_ops_blank(int blank_mode, struct fb_info *info)
 	}
 	bufptr = dlfb_vidreg_unlock(bufptr);
 
-	dlfb_submit_urb(dev, urb, bufptr - (char*) urb->transfer_buffer);
+	dlfb_submit_urb(dev, urb, bufptr - (char *) urb->transfer_buffer);
 
 	return 0;
 }
@@ -1289,15 +1286,14 @@ static void dlfb_dpy_deferred_io(struct fb_info *info,
 
 	/* walk the written page list and render each to device */
 	list_for_each_entry(cur, &fbdefio->pagelist, lru) {
-		dlfb_render_hline(dev, &urb, (char*) info->fix.smem_start,
+		dlfb_render_hline(dev, &urb, (char *) info->fix.smem_start,
 				  &cmd, cur->index << PAGE_SHIFT,
 				  PAGE_SIZE, &bytes_identical, &bytes_sent);
 		bytes_rendered += PAGE_SIZE;
 		fault_count++;
 	}
 
-	if (cmd > (char *) urb->transfer_buffer)
-	{
+	if (cmd > (char *) urb->transfer_buffer) {
 		/* Send partial buffer remaining before exiting */
 		int len = cmd - (char *) urb->transfer_buffer;
 		dlfb_submit_urb(dev, urb, len);
@@ -1457,10 +1453,10 @@ static int dlfb_usb_probe(struct usb_interface *interface,
 	dlfb_ops_set_par(info);
 
 	/* paint greenscreen */
-	pix_framebuffer = (u16*) videomemory;
-	for (i = 0; i < videomemorysize / 2; i++) {
+	pix_framebuffer = (u16 *) videomemory;
+	for (i = 0; i < videomemorysize / 2; i++)
 		pix_framebuffer[i] = 0x37e6;
-	}
+
 	dlfb_handle_damage(dev, 0, 0, info->var.xres, info->var.yres,
 				videomemory);
 
@@ -1471,9 +1467,8 @@ static int dlfb_usb_probe(struct usb_interface *interface,
 	}
 	registered = 1;
 
-	for (i = 0; i < ARRAY_SIZE(fb_device_attrs); i++) {
+	for (i = 0; i < ARRAY_SIZE(fb_device_attrs); i++)
 		device_create_file(info->dev, &fb_device_attrs[i]);
-	}
 
 	device_create_bin_file(info->dev, &edid_attr);
 
@@ -1516,9 +1511,8 @@ static void dlfb_usb_disconnect(struct usb_interface *interface)
 
 	usb_set_intfdata(interface, NULL);
 
-	for (i = 0; i < ARRAY_SIZE(fb_device_attrs); i++) {
+	for (i = 0; i < ARRAY_SIZE(fb_device_attrs); i++)
 		device_remove_file(info->dev, &fb_device_attrs[i]);
-	}
 
 	device_remove_bin_file(info->dev, &edid_attr);
 
@@ -1606,8 +1600,7 @@ static void dlfb_free_urb_list(struct dlfb_data *dev)
 	dl_notice("Waiting for completes and freeing all render urbs\n");
 
 	/* keep waiting and freeing, until we've got 'em all */
-	while (count--)
-	{
+	while (count--) {
 		/* Timeout means a memory leak and/or fault */
 		ret = down_timeout(&dev->urbs.limit_sem, FREE_URB_TIMEOUT);
 		if (ret) {
@@ -1647,8 +1640,7 @@ static int dlfb_alloc_urb_list(struct dlfb_data *dev, int count, size_t size)
 	dev->urbs.size = size;
 	INIT_LIST_HEAD(&dev->urbs.list);
 
-	while (i < count )
-	{
+	while (i < count) {
 		unode = kzalloc(sizeof(struct urb_node), GFP_KERNEL);
 		if (!unode)
 			break;
@@ -1663,8 +1655,7 @@ static int dlfb_alloc_urb_list(struct dlfb_data *dev, int count, size_t size)
 
 		buf = usb_buffer_alloc(dev->udev, MAX_TRANSFER, GFP_KERNEL,
 					&urb->transfer_dma);
-		if (!buf)
-		{
+		if (!buf) {
 			kfree(unode);
 			usb_free_urb(urb);
 			break;
@@ -1691,7 +1682,8 @@ static int dlfb_alloc_urb_list(struct dlfb_data *dev, int count, size_t size)
 	return i;
 }
 
-static struct urb* dlfb_get_urb(struct dlfb_data *dev) {
+static struct urb *dlfb_get_urb(struct dlfb_data *dev)
+{
 	int ret = 0;
 	struct list_head *entry;
 	struct urb_node *unode;

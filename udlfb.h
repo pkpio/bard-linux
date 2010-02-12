@@ -81,8 +81,8 @@ struct dlfb_data {
 #define MIN_RAW_CMD_BYTES	(RAW_HEADER_BYTES + MIN_RAW_PIX_BYTES)
 
 /* remove these once align.h patch is taken into kernel */
-#define DL_ALIGN_UP(x,a) ALIGN(x,a)
-#define DL_ALIGN_DOWN(x,a) ALIGN(x-(a-1), a)
+#define DL_ALIGN_UP(x, a) ALIGN(x, a)
+#define DL_ALIGN_DOWN(x, a) ALIGN(x-(a-1), a)
 
 /* remove once this gets added to sysfs.h */
 #define __ATTR_RW(attr) __ATTR(attr, 0644, attr##_show, attr##_store)
