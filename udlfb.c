@@ -486,7 +486,18 @@ static void dlfb_compress_hline(
 	return;
 }
 
-static void dlfb_compress_hline_rlx(
+#else
+
+/*
+ * Rather than 256 pixel commands which are either rl or raw encoded,
+ * the rlx command simply assumes alternating raw and rl spans within one cmd.
+ * This has a slightly larger header overhead, but produces more even results.
+ * It also processes all data (read and write) in a single pass.
+ * Performance benchmarks of common cases show it having just slightly better
+ * compression, with similar CPU consumpion. But for very rl friendly data,
+ * will compress not quite as well.
+ */
+static void dlfb_compress_hline(
 	const uint16_t **pixel_start_ptr,
 	const uint16_t *const pixel_end,
 	uint32_t *device_address_ptr,
