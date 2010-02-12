@@ -366,35 +366,6 @@ static int dlfb_trim_hline(const u8 *bback, const u8 **bfront, int *width_bytes)
 	return identical * sizeof(unsigned long);
 }
 
-#ifdef UDLFB_RL_RAW_COMPRESSION
-
-/* thanks to Henrik Bjerregaard Pedersen for this function */
-static u8 *rle_compress16(const u16 *src, const u16 * const src_end,
-				u8 *dst, const u8 *dst_end)
-{
-	const char bpp = 2;
-
-	dst += RLE_HEADER_BYTES;  /* header will be filled in if worth it */
-
-	prefetch_range((void *) src, (src_end - src) * bpp);
-	prefetchw(dst); /* at least get first cache line */
-
-	while ((src < src_end) && (dst < dst_end)) {
-
-		const u16 * const start = src;
-		const u16 pix0 = *src++;
-
-		while ((src < src_end) && (*src == pix0))
-			src++;
-
-		*dst++ = (src-start);
-		*(u16 *)dst = cpu_to_be16(pix0);
-		dst += 2;
-	}
-
-	return dst;
-}
-
 /*
 Render a command stream for an encoded horizontal line segment of pixels.
 
@@ -413,90 +384,15 @@ buffers if the line will take several buffers to complete.
 A single command can transmit a maximum of 256 pixels,
 regardless of the compression ratio (protocol design limit).
 To the hardware, 0 for a size byte means 256
+
+Rather than 256 pixel commands which are either rl or raw encoded,
+the rlx command simply assumes alternating raw and rl spans within one cmd.
+This has a slightly larger header overhead, but produces more even results.
+It also processes all data (read and write) in a single pass.
+Performance benchmarks of common cases show it having just slightly better
+compression than 256 pixel raw -or- rle commands, with similar CPU consumpion.
+But for very rl friendly data, will compress not quite as well.
 */
-static void dlfb_compress_hline(
-	const uint16_t **pixel_start_ptr,
-	const uint16_t *const pixel_end,
-	uint32_t *device_address_ptr,
-	uint8_t **command_buffer_ptr,
-	const uint8_t *const cmd_buffer_end)
-{
-	const uint16_t *pixel = *pixel_start_ptr;
-	uint32_t dev_addr  = *device_address_ptr;
-	uint8_t *cmd = *command_buffer_ptr;
-	const int bpp = 2;
-	const uint16_t *cmd_pixel_start, *cmd_pixel_end = 0;
-	uint32_t be_dev_addr;
-	uint8_t *rle_cmd_end, *raw_cmd_end;
-	int rem;
-
-	while ((pixel < pixel_end) &&
-	       (cmd < cmd_buffer_end - MIN_RLE_CMD_BYTES)) {
-
-		rem = min(pixel_end - pixel, min(MAX_CMD_PIXELS,
-			 (cmd_buffer_end - cmd - RLE_HEADER_BYTES) / bpp));
-
-		cmd_pixel_start = pixel;
-		cmd_pixel_end = pixel + rem;
-
-		prefetch_range((void *) pixel, rem * bpp);
-
-		raw_cmd_end = cmd + RAW_HEADER_BYTES + (rem * bpp);
-
-		/* optimistically assume rle will provide some compression */
-		rle_cmd_end = rle_compress16(cmd_pixel_start, cmd_pixel_end,
-						cmd, raw_cmd_end);
-
-		/* fill in the header elements common to rle and raw */
-		cmd[0] = 0xAF;
-		be_dev_addr = cpu_to_be32(dev_addr);
-		cmd[2] = (uint8_t) ((be_dev_addr >> 8) & 0xFF);
-		cmd[3] = (uint8_t) ((be_dev_addr >> 16) & 0xFF);
-		cmd[4] = (uint8_t) ((be_dev_addr >> 24) & 0xFF);
-		cmd[5] = rem & 0xFF;
-
-		/* go with the better method (overwriting rle data if raw) */
-		if (rle_cmd_end < raw_cmd_end) {
-			cmd[1] = 0x69;
-			cmd = rle_cmd_end;
-			pixel = cmd_pixel_end;
-		} else {
-			cmd[1] = 0x68;
-			cmd = &cmd[6];
-			for (; pixel < cmd_pixel_end; pixel++) {
-				*(uint16_t *) cmd = cpu_to_be16p(pixel);
-				cmd += 2;
-			}
-		}
-
-		dev_addr += (pixel - cmd_pixel_start) * bpp;
-	}
-
-	if (cmd >= cmd_buffer_end - MIN_RLE_CMD_BYTES) {
-		/* Fill leftover bytes with no-ops */
-		if (cmd < cmd_buffer_end)
-			memset(cmd, 0xAF, cmd_buffer_end - cmd);
-		cmd = (uint8_t *) cmd_buffer_end;
-	}
-
-	*command_buffer_ptr = cmd;
-	*pixel_start_ptr = pixel;
-	*device_address_ptr = dev_addr;
-
-	return;
-}
-
-#else
-
-/*
- * Rather than 256 pixel commands which are either rl or raw encoded,
- * the rlx command simply assumes alternating raw and rl spans within one cmd.
- * This has a slightly larger header overhead, but produces more even results.
- * It also processes all data (read and write) in a single pass.
- * Performance benchmarks of common cases show it having just slightly better
- * compression, with similar CPU consumpion. But for very rl friendly data,
- * will compress not quite as well.
- */
 static void dlfb_compress_hline(
 	const uint16_t **pixel_start_ptr,
 	const uint16_t *const pixel_end,
@@ -586,8 +482,6 @@ static void dlfb_compress_hline(
 
 	return;
 }
-
-#endif
 
 /*
  * There are 3 copies of every pixel: The front buffer that the fbdev
