@@ -54,6 +54,7 @@ static struct usb_device_id id_table[] = {
 	{.idVendor = 0x17e9, .match_flags = USB_DEVICE_ID_MATCH_VENDOR,},
 	{},
 };
+MODULE_DEVICE_TABLE(usb, id_table);
 
 #ifndef CONFIG_FB_DEFERRED_IO
 #warning message "kernel FB_DEFFERRED_IO option to support generic fbdev apps"
@@ -128,6 +129,10 @@ static char *dlfb_set_base16bpp(char *wrptr, u32 base)
 	return dlfb_set_register(wrptr, 0x22, base);
 }
 
+/*
+ * DisplayLink HW has separate 16bpp and 8bpp framebuffers.
+ * In 24bpp modes, the low 323 RGB bits go in the 8bpp framebuffer
+ */
 static char *dlfb_set_base8bpp(char *wrptr, u32 base)
 {
 	wrptr = dlfb_set_register(wrptr, 0x26, base >> 16);
@@ -208,7 +213,7 @@ static char *dlfb_set_vid_cmds(char *wrptr, struct fb_var_screeninfo *var)
 
 	/* x end count is active + blanking - 1 */
 	wrptr = dlfb_set_register_lfsr16(wrptr, 0x09,
-				xde + var->right_margin - 1);
+			xde + var->right_margin - 1);
 
 	/* libdlo hardcodes hsync start to 1 */
 	wrptr = dlfb_set_register_lfsr16(wrptr, 0x0B, 1);
@@ -235,7 +240,7 @@ static char *dlfb_set_vid_cmds(char *wrptr, struct fb_var_screeninfo *var)
 
 	/* convert picoseconds to 5kHz multiple for pclk5k = x * 1E12/5k */
 	wrptr = dlfb_set_register_16be(wrptr, 0x1B,
-				200*1000*1000/var->pixclock);
+			200*1000*1000/var->pixclock);
 
 	return wrptr;
 }
@@ -313,17 +318,10 @@ static int dlfb_ops_mmap(struct fb_info *info, struct vm_area_struct *vma)
 			size = 0;
 	}
 
-	vma->vm_flags |= (VM_RESERVED | VM_DONTEXPAND);
+	vma->vm_flags |= VM_RESERVED;	/* avoid to swap out this VMA */
 	return 0;
 
 }
-
-/* ioctl structure */
-struct dloarea {
-	int x, y;
-	int w, h;
-	int x2, y2;
-};
 
 /*
  * Trims identical data from front and back of line
@@ -668,9 +666,7 @@ static void dlfb_get_edid(struct dlfb_data *dev)
 				    0);
 		dev->edid[i] = rbuf[1];
 	}
-
 }
-
 
 static int dlfb_ops_ioctl(struct fb_info *info, unsigned int cmd,
 				unsigned long arg)
@@ -691,7 +687,7 @@ static int dlfb_ops_ioctl(struct fb_info *info, unsigned int cmd,
 		return 0;
 	}
 
-	/* TODO: Propose a standard fb.h ioctl to report mmap damage */
+	/* TODO: Help propose a standard fb.h ioctl to report mmap damage */
 	if (cmd == DLFB_IOCTL_REPORT_DAMAGE) {
 
 		area = (struct dloarea *)arg;
@@ -897,7 +893,6 @@ static int dlfb_ops_set_par(struct fb_info *info)
 	return dlfb_set_video_mode(dev, &info->var);
 }
 
-
 static int dlfb_ops_blank(int blank_mode, struct fb_info *info)
 {
 	struct dlfb_data *dev = info->par;
@@ -926,7 +921,7 @@ static int dlfb_ops_blank(int blank_mode, struct fb_info *info)
 	return 0;
 }
 
-static struct fb_ops fbops = {
+static struct fb_ops dlfb_ops = {
 	.owner = THIS_MODULE,
 	.fb_setcolreg = dlfb_ops_setcolreg,
 	.fb_fillrect = dlfb_ops_fillrect,
@@ -1218,7 +1213,7 @@ static struct fb_deferred_io dlfb_defio = {
 static int dlfb_select_std_channel(struct dlfb_data *dev)
 {
 	int ret;
-	u8 set_def_chn[] = {	0x57, 0xCD, 0xDC, 0xA7,
+	u8 set_def_chn[] = {	   0x57, 0xCD, 0xDC, 0xA7,
 				0x1C, 0x88, 0x5E, 0x15,
 				0x60, 0xFE, 0xC6, 0x97,
 				0x16, 0x3D, 0x47, 0xF2  };
@@ -1229,6 +1224,7 @@ static int dlfb_select_std_channel(struct dlfb_data *dev)
 			set_def_chn, sizeof(set_def_chn), USB_CTRL_SET_TIMEOUT);
 	return ret;
 }
+
 
 static int dlfb_usb_probe(struct usb_interface *interface,
 			const struct usb_device_id *id)
@@ -1282,7 +1278,7 @@ static int dlfb_usb_probe(struct usb_interface *interface,
 	dev->info = info;
 	info->par = dev;
 	info->pseudo_palette = dev->pseudo_palette;
-	info->fbops = &fbops;
+	info->fbops = &dlfb_ops;
 
 	var = &info->var;
 
@@ -1339,7 +1335,6 @@ static int dlfb_usb_probe(struct usb_interface *interface,
 #ifdef CONFIG_FB_DEFERRED_IO
 	atomic_set(&dev->use_defio, 1);
 #endif
-
 	atomic_set(&dev->usb_active, 1);
 	dlfb_select_std_channel(dev);
 
@@ -1624,9 +1619,9 @@ static int dlfb_submit_urb(struct dlfb_data *dev, struct urb *urb, size_t len)
 	return ret;
 }
 
-MODULE_DEVICE_TABLE(usb, id_table);
 MODULE_AUTHOR("Roberto De Ioris <roberto@unbit.it>, "
 	      "Jaya Kumar <jayakumar.lkml@gmail.com>, "
 	      "Bernie Thompson <bernie@plugable.com>");
 MODULE_DESCRIPTION("DisplayLink kernel framebuffer driver");
 MODULE_LICENSE("GPL");
+

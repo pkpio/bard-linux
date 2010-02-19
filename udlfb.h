@@ -2,11 +2,19 @@
 #define UDLFB_H
 
 /*
- * TODO: Use _IOWR() and fixed size struct
- * To do so, need to update matching X server
+ * TODO: Propose standard fb.h ioctl for reporting damage,
+ * using _IOWR() and one of the existing area structs from fb.h
+ * Consider these ioctls deprecated, but they're still used by the
+ * DisplayLink X server as yet - need both to be modified in tandem
+ * when new ioctl(s) are ready.
  */
 #define DLFB_IOCTL_RETURN_EDID	 0xAD
 #define DLFB_IOCTL_REPORT_DAMAGE 0xAA
+struct dloarea {
+	int x, y;
+	int w, h;
+	int x2, y2;
+};
 
 struct urb_node {
 	struct list_head entry;
@@ -87,13 +95,12 @@ struct dlfb_data {
 /* remove once this gets added to sysfs.h */
 #define __ATTR_RW(attr) __ATTR(attr, 0644, attr##_show, attr##_store)
 
-/* KERN_ERR level for now - we need easy debug/feedback from all users still */
 #define dl_err(format, arg...) \
 	dev_err(dev->gdev, "dlfb: " format, ## arg)
 #define dl_warn(format, arg...) \
-	dev_err(dev->gdev, "dlfb: " format, ## arg)
+	dev_warn(dev->gdev, "dlfb: " format, ## arg)
 #define dl_notice(format, arg...) \
-	dev_err(dev->gdev, "dlfb: " format, ## arg)
+	dev_notice(dev->gdev, "dlfb: " format, ## arg)
 #define dl_info(format, arg...) \
-	dev_err(dev->gdev, "dlfb: " format, ## arg)
+	dev_info(dev->gdev, "dlfb: " format, ## arg)
 #endif

@@ -1,4 +1,4 @@
-config FB_DISPLAYLINK
+config FB_UDL
 	tristate "Displaylink USB Framebuffer support"
 	depends on FB && USB
 	select FB_MODE_HELPERS
