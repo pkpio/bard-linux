@@ -792,7 +792,6 @@ static int dlfb_ops_ioctl(struct fb_info *info, unsigned int cmd,
 	/* TODO: Update X server to get this from sysfs instead */
 	if (cmd == DLFB_IOCTL_RETURN_EDID) {
 		char *edid = (char *)arg;
-		dlfb_get_edid(dev);
 		if (copy_to_user(edid, dev->edid, sizeof(dev->edid))) {
 			return -EFAULT;
 		}
