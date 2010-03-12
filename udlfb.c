@@ -1213,9 +1213,6 @@ static ssize_t edid_show(struct kobject *kobj, struct bin_attribute *a,
 	char *edid = &dev->edid[0];
 	const size_t size = sizeof(dev->edid);
 
-	if (dlfb_parse_edid(dev, &fb_info->var, fb_info))
-		return 0;
-
 	if (off >= size)
 		return 0;
 
