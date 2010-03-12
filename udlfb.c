@@ -762,20 +762,26 @@ static void dlfb_ops_fillrect(struct fb_info *info,
 
 }
 
-static void dlfb_get_edid(struct dlfb_data *dev)
+static int dlfb_get_edid(struct dlfb_data *dev, char *edid, int len)
 {
 	int i;
 	int ret;
 	char rbuf[2];
 
-	for (i = 0; i < sizeof(dev->edid); i++) {
+	for (i = 0; i < len; i++) {
 		ret = usb_control_msg(dev->udev,
 				    usb_rcvctrlpipe(dev->udev, 0), (0x02),
 				    (0x80 | (0x02 << 5)), i << 8, 0xA1, rbuf, 2,
-				    0);
-		dev->edid[i] = rbuf[1];
+				    HZ);
+                if (ret < 1) {
+			dl_err("Read EDID byte %d failed err %x", i, ret);
+			i--;
+			break;
+		}
+		edid[i] = rbuf[1];
 	}
 
+	return i;
 }
 
 
@@ -1067,11 +1073,16 @@ static int dlfb_parse_edid(struct dlfb_data *dev,
 	int i;
 	const struct fb_videomode *default_vmode = NULL;
 	int result = 0;
+        char edid[sizeof(dev->edid)];
 
 	fb_destroy_modelist(&info->modelist);
 	memset(&info->monspecs, 0, sizeof(info->monspecs));
 
-	dlfb_get_edid(dev);
+	i = dlfb_get_edid(dev, edid, sizeof(dev->edid));
+
+	if (i >= 128)
+		memcpy(dev->edid, edid, min(i, (int) sizeof(dev->edid)));
+
 	fb_edid_to_monspecs(dev->edid, &info->monspecs);
 
 	if (info->monspecs.modedb_len > 0) {
