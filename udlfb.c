@@ -1082,16 +1082,27 @@ static int dlfb_parse_edid(struct dlfb_data *dev,
 	const struct fb_videomode *default_vmode = NULL;
 	int result = 0;
         char edid[sizeof(dev->edid)];
+	int tries = 10;
 
 	fb_destroy_modelist(&info->modelist);
 	memset(&info->monspecs, 0, sizeof(info->monspecs));
 
-	i = dlfb_get_edid(dev, edid, sizeof(dev->edid));
+	/*
+	 * Have hit cases where EDID data is returned, but doesn't parse as valid
+	 * Try again a few times, in case of e.g. analog cable noise
+	 */
+	while (tries--) {
 
-	if (i >= 128)
-		memcpy(dev->edid, edid, min(i, (int) sizeof(dev->edid)));
+		i = dlfb_get_edid(dev, edid, sizeof(dev->edid));
 
-	fb_edid_to_monspecs(dev->edid, &info->monspecs);
+		if (i >= 128)
+			memcpy(dev->edid, edid, min(i, (int) sizeof(dev->edid)));
+
+		fb_edid_to_monspecs(dev->edid, &info->monspecs);
+
+		if (info->monspecs.modedb_len > 0)
+			break;
+	}
 
 	if (info->monspecs.modedb_len > 0) {
 
