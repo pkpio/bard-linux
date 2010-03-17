@@ -1320,6 +1320,10 @@ static int dlfb_usb_probe(struct usb_interface *interface,
 	info->fix.smem_start = (unsigned long) videomemory;
 	info->flags = udlfb_info_flags;
 
+#ifdef FBINFO_MISC_FIRMWARE
+	info->aperture_base = info->fix.smem_start;
+	info->aperture_size = info->fix.smem_len;
+#endif
 
 	/*
 	 * Second framebuffer copy, mirroring the state of the framebuffer
