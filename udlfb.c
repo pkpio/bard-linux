@@ -56,9 +56,18 @@ static struct usb_device_id id_table[] = {
 };
 MODULE_DEVICE_TABLE(usb, id_table);
 
-#ifndef CONFIG_FB_DEFERRED_IO
-#warning message "kernel FB_DEFFERRED_IO option to support generic fbdev apps"
-#endif
+/*
+ * defio/udlfb path is too buggy at this time, in paticular
+ * 1) intermittant kernel oops where unmapped page is passed to be rendered
+ * 2) over time, pages stop triggering faults, accumulate dead lines on screen
+ * 3) with several devices attached, wrong fb gets notified of dirty page
+ */
+#undef CONFIG_FB_DEFERRED_IO
+/*
+ * #ifndef CONFIG_FB_DEFERRED_IO
+ * #warning message "FB_DEFFERRED_IO required to support generic fbdev apps"
+ * #endif
+ */
 
 #ifndef CONFIG_FB_SYS_IMAGEBLIT
 #ifndef CONFIG_FB_SYS_IMAGEBLIT_MODULE
