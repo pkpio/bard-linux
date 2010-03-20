@@ -774,7 +774,11 @@ static int dlfb_get_edid(struct dlfb_data *dev, char *edid, int len)
 {
 	int i;
 	int ret;
-	char rbuf[2];
+	char *rbuf;
+
+	rbuf = kmalloc(2, GFP_KERNEL);
+	if (!rbuf)
+		return 0;
 
 	for (i = 0; i < len; i++) {
 		ret = usb_control_msg(dev->udev,
@@ -788,6 +792,8 @@ static int dlfb_get_edid(struct dlfb_data *dev, char *edid, int len)
 		}
 		edid[i] = rbuf[1];
 	}
+
+	kfree(rbuf);
 
 	return i;
 }
