@@ -71,7 +71,7 @@ MODULE_DEVICE_TABLE(usb, id_table);
 
 #ifndef CONFIG_FB_SYS_IMAGEBLIT
 #ifndef CONFIG_FB_SYS_IMAGEBLIT_MODULE
-#warning message "FB_SYS_* in kernel or module option to support fb console"
+#warning message "FB_SYS_* is off, framebuffer console not supported"
 #endif
 #endif
 
@@ -712,19 +712,32 @@ static void dlfb_ops_fillrect(struct fb_info *info,
 
 }
 
-static void dlfb_get_edid(struct dlfb_data *dev)
+static int dlfb_get_edid(struct dlfb_data *dev, char *edid, int len)
 {
 	int i;
 	int ret;
-	char rbuf[2];
+	char *rbuf;
 
-	for (i = 0; i < sizeof(dev->edid); i++) {
+	rbuf = kmalloc(2, GFP_KERNEL);
+	if (!rbuf)
+		return 0;
+
+	for (i = 0; i < len; i++) {
 		ret = usb_control_msg(dev->udev,
 				    usb_rcvctrlpipe(dev->udev, 0), (0x02),
 				    (0x80 | (0x02 << 5)), i << 8, 0xA1, rbuf, 2,
-				    0);
-		dev->edid[i] = rbuf[1];
+				    HZ);
+                if (ret < 1) {
+			dl_err("Read EDID byte %d failed err %x", i, ret);
+			i--;
+			break;
+		}
+		edid[i] = rbuf[1];
 	}
+
+	kfree(rbuf);
+
+	return i;
 }
 
 static int dlfb_ops_ioctl(struct fb_info *info, unsigned int cmd,
@@ -740,7 +753,6 @@ static int dlfb_ops_ioctl(struct fb_info *info, unsigned int cmd,
 	/* TODO: Update X server to get this from sysfs instead */
 	if (cmd == DLFB_IOCTL_RETURN_EDID) {
 		char *edid = (char *)arg;
-		dlfb_get_edid(dev);
 		if (copy_to_user(edid, dev->edid, sizeof(dev->edid)))
 			return -EFAULT;
 		return 0;
@@ -1016,12 +1028,28 @@ static int dlfb_parse_edid(struct dlfb_data *dev,
 	int i;
 	const struct fb_videomode *default_vmode = NULL;
 	int result = 0;
+        char edid[sizeof(dev->edid)];
+	int tries = 10;
 
 	fb_destroy_modelist(&info->modelist);
 	memset(&info->monspecs, 0, sizeof(info->monspecs));
 
-	dlfb_get_edid(dev);
-	fb_edid_to_monspecs(dev->edid, &info->monspecs);
+	/*
+	 * Have hit cases where EDID data is returned, but doesn't parse as valid
+	 * Try again a few times, in case of e.g. analog cable noise
+	 */
+	while (tries--) {
+
+		i = dlfb_get_edid(dev, edid, sizeof(dev->edid));
+
+		if (i >= 128)
+			memcpy(dev->edid, edid, min(i, (int) sizeof(dev->edid)));
+
+		fb_edid_to_monspecs(dev->edid, &info->monspecs);
+
+		if (info->monspecs.modedb_len > 0)
+			break;
+	}
 
 	if (info->monspecs.modedb_len > 0) {
 
@@ -1131,9 +1159,6 @@ static ssize_t edid_show(struct kobject *kobj, struct bin_attribute *a,
 	struct dlfb_data *dev = fb_info->par;
 	char *edid = &dev->edid[0];
 	const size_t size = sizeof(dev->edid);
-
-	if (dlfb_parse_edid(dev, &fb_info->var, fb_info))
-		return 0;
 
 	if (off >= size)
 		return 0;
