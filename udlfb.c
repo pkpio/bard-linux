@@ -619,7 +619,7 @@ int dlfb_handle_damage(struct dlfb_data *dev, int x, int y,
 static ssize_t dlfb_read(struct fb_info *info, char __user *buf,
 			 size_t count, loff_t *ppos)
 {
-	ssize_t result = -EINVAL;
+	ssize_t result = -ENOSYS;
 
 #if defined CONFIG_FB_SYS_FOPS || defined CONFIG_FB_SYS_FOPS_MODULE
 	result = fb_sys_read(info, buf, count, ppos);
@@ -637,7 +637,7 @@ static ssize_t dlfb_read(struct fb_info *info, char __user *buf,
 static ssize_t dlfb_write(struct fb_info *info, const char __user *buf,
 			  size_t count, loff_t *ppos)
 {
-	ssize_t result = -EINVAL;
+	ssize_t result = -ENOSYS;
 	struct dlfb_data *dev = info->par;
 	u32 offset = (u32) *ppos;
 
