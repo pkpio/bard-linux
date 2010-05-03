@@ -917,8 +917,13 @@ static int dlfb_is_valid_mode(struct fb_videomode *mode,
 {
 	struct dlfb_data *dev = info->par;
 
-	if (mode->xres * mode->yres > dev->sku_pixel_limit)
+	if (mode->xres * mode->yres > dev->sku_pixel_limit) {
+		dl_warn("mode %dx%d beyond chip capabilities\n",
+		       mode->xres, mode->yres);
 		return 0;
+	}
+
+	dl_warn("mode %dx%d valid\n", mode->xres, mode->yres);
 
 	return 1;
 }
@@ -1057,6 +1062,8 @@ static int dlfb_parse_edid(struct dlfb_data *dev,
 			if (dlfb_is_valid_mode(&info->monspecs.modedb[i], info))
 				fb_add_videomode(&info->monspecs.modedb[i],
 					&info->modelist);
+			else /* if we've removed top/best mode */
+				info->monspecs.misc &= ~FB_MISC_1ST_DETAIL;
 		}
 
 		default_vmode = fb_find_best_display(&info->monspecs,
@@ -1091,8 +1098,11 @@ static int dlfb_parse_edid(struct dlfb_data *dev,
 						     &info->modelist);
 	}
 
-	fb_videomode_to_var(var, default_vmode);
-	dlfb_var_color_format(var);
+	if (default_vmode != NULL) {
+		fb_videomode_to_var(var, default_vmode);
+		dlfb_var_color_format(var);
+	} else
+		result = -EINVAL;
 
 	return result;
 }
@@ -1312,6 +1322,70 @@ static int dlfb_select_std_channel(struct dlfb_data *dev)
 	return ret;
 }
 
+static int dlfb_parse_vendor_descriptor(struct dlfb_data *dev,
+					struct usb_device *usbdev)
+{
+	char *desc;
+	char *desc_end;
+
+	u8 total_len = 0;
+
+	desc = kzalloc(MAX_VENDOR_DESCRIPTOR_SIZE, GFP_KERNEL);
+	if (!desc)
+		return false;
+
+	total_len = usb_get_descriptor(usbdev, 0x5f, /* vendor specific */
+				    0, desc, MAX_VENDOR_DESCRIPTOR_SIZE);
+        if (total_len > 5) {
+		dl_info("descriptor length:%x data:%02x %02x %02x %02x %02x " \
+		       "%02x %02x %02x %02x %02x %02x\n", total_len, desc[0],
+		       desc[1], desc[2], desc[3], desc[4], desc[5], desc[6],
+		       desc[7], desc[8], desc[9], desc[10]);
+
+		if ((desc[0] != total_len) || /* descriptor length */
+		    (desc[1] != 0x5f) ||   /* vendor descriptor type */
+		    (desc[2] != 0x01) ||   /* version (2 bytes) */
+		    (desc[3] != 0x00) ||
+		    (desc[4] != total_len - 2)) /* length after type */
+			goto unrecognized;
+
+		desc_end = desc + total_len;
+		desc += 5; /* the fixed header we've already parsed */
+
+		while (desc < desc_end) {
+			u8 length;
+			u16 key;
+
+			key = *((u16 *) desc);
+			desc += sizeof(u16);
+			length = *desc;
+			desc++;
+
+			switch (key) {
+			case 0x0200: { /* max_area */
+				u32 max_area;
+				max_area = le32_to_cpu(*((u32 *)desc));
+				dl_err("DisplayLink chip limited to %d pixels\n", max_area);
+				dev->sku_pixel_limit = max_area;
+				break;
+			}
+			default:
+				break;
+			}
+			desc += length;
+		}
+	}
+
+	goto success;
+
+unrecognized:
+	/* allow udlfb to load for now even if firmware unrecognized */
+	dl_err("Unrecognized vendor firmware descriptor\n");
+
+success:
+	kfree(desc);
+	return true;
+}
 
 static int dlfb_usb_probe(struct usb_interface *interface,
 			const struct usb_device_id *id)
@@ -1345,6 +1419,11 @@ static int dlfb_usb_probe(struct usb_interface *interface,
 	dev->gdev = &usbdev->dev; /* our generic struct device * */
 	usb_set_intfdata(interface, dev);
 
+	if (!dlfb_parse_vendor_descriptor(dev, usbdev)) {
+		dl_err("firmware not recognized. Assuming incompatible device\n");
+		goto error;
+	}
+
 	if (!dlfb_alloc_urb_list(dev, WRITES_IN_FLIGHT, MAX_TRANSFER)) {
 		retval = -ENOMEM;
 		dl_err("dlfb_alloc_urb_list failed\n");
@@ -1369,12 +1448,16 @@ static int dlfb_usb_probe(struct usb_interface *interface,
 
 	var = &info->var;
 
-	/* TODO set limit based on actual SKU detection */
-	dev->sku_pixel_limit = 2048 * 1152;
+	/* If we didn't figure this out earlier, set to highest possible */
+	if (dev->sku_pixel_limit == 0)
+		dev->sku_pixel_limit = 2048 * 1152;
 
 	INIT_LIST_HEAD(&info->modelist);
-	dlfb_parse_edid(dev, var, info);
-
+	retval = dlfb_parse_edid(dev, var, info);
+	if (retval != 0) {
+		dl_err("unable to find mode match between display and adapter\n");
+		goto error;
+	}
 	/*
 	 * ok, now that we've got the size info, we can alloc our framebuffer.
 	 */
