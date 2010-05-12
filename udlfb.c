@@ -1326,13 +1326,15 @@ static int dlfb_parse_vendor_descriptor(struct dlfb_data *dev,
 					struct usb_device *usbdev)
 {
 	char *desc;
+	char *buf;
 	char *desc_end;
 
 	u8 total_len = 0;
 
-	desc = kzalloc(MAX_VENDOR_DESCRIPTOR_SIZE, GFP_KERNEL);
-	if (!desc)
+	buf = kzalloc(MAX_VENDOR_DESCRIPTOR_SIZE, GFP_KERNEL);
+	if (!buf)
 		return false;
+	desc = buf;
 
 	total_len = usb_get_descriptor(usbdev, 0x5f, /* vendor specific */
 				    0, desc, MAX_VENDOR_DESCRIPTOR_SIZE);
@@ -1383,7 +1385,7 @@ unrecognized:
 	dl_err("Unrecognized vendor firmware descriptor\n");
 
 success:
-	kfree(desc);
+	kfree(buf);
 	return true;
 }
 
