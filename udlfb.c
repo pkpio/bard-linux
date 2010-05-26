@@ -650,7 +650,8 @@ static ssize_t dlfb_write(struct fb_info *info, const char __user *buf,
 
 	if (result > 0) {
 		int start = max((int)(offset / info->fix.line_length) - 1, 0);
-		int lines = min((result / info->fix.line_length) + 1, info->var.yres);
+		int lines = min((u32)((result / info->fix.line_length) + 1),
+				(u32)info->var.yres);
 
 		dlfb_handle_damage(dev, 0, start, info->var.xres,
 			lines, info->screen_base);
