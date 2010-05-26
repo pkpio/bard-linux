@@ -106,3 +106,8 @@ struct dlfb_data {
 #define dl_info(format, arg...) \
 	dev_info(dev->gdev, "dlfb: " format, ## arg)
 #endif
+
+#if !defined(usb_alloc_coherent)
+#define usb_alloc_coherent usb_buffer_alloc
+#define usb_free_coherent usb_buffer_free
+#endif
