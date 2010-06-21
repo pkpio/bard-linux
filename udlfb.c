@@ -659,7 +659,7 @@ static ssize_t dlfb_write(struct fb_info *info, const char __user *buf,
 #endif
 
 	return result;
-}	
+}
 
 /* hardware has native COPY command (see libdlo), but not worth it for fbcon */
 static void dlfb_ops_copyarea(struct fb_info *info,
@@ -990,7 +990,7 @@ static int dlfb_ops_blank(int blank_mode, struct fb_info *info)
 		bufptr = dlfb_enable_hvsync(bufptr, false);
 		bufptr = dlfb_vidreg_unlock(bufptr);
 
-		dlfb_submit_urb(dev, urb, bufptr - 
+		dlfb_submit_urb(dev, urb, bufptr -
 				(char *) urb->transfer_buffer);
 	} else {
 		dlfb_set_video_mode(dev, &info->var);
@@ -1340,7 +1340,7 @@ static int dlfb_parse_vendor_descriptor(struct dlfb_data *dev,
 	total_len = usb_get_descriptor(usbdev, 0x5f, /* vendor specific */
 				    0, desc, MAX_VENDOR_DESCRIPTOR_SIZE);
         if (total_len > 5) {
-		dl_info("descriptor length:%x data:%02x %02x %02x %02x %02x " \
+		dl_info("vendor descriptor length:%x data:%02x %02x %02x %02x %02x " \
 		       "%02x %02x %02x %02x %02x %02x\n", total_len, desc[0],
 		       desc[1], desc[2], desc[3], desc[4], desc[5], desc[6],
 		       desc[7], desc[8], desc[9], desc[10]);
@@ -1421,6 +1421,12 @@ static int dlfb_usb_probe(struct usb_interface *interface,
 	dev->udev = usbdev;
 	dev->gdev = &usbdev->dev; /* our generic struct device * */
 	usb_set_intfdata(interface, dev);
+
+	dl_warn("%s %s Serial %s\n",
+		usbdev->manufacturer, usbdev->product, usbdev->serial);
+	dl_warn("vid_%04x&pid_%04x&rev_%04x\n",
+		usbdev->descriptor.idVendor, usbdev->descriptor.idProduct,
+		usbdev->descriptor.bcdDevice);
 
 	if (!dlfb_parse_vendor_descriptor(dev, usbdev)) {
 		dl_err("firmware not recognized. Assuming incompatible device\n");
