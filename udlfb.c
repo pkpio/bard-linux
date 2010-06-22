@@ -924,7 +924,7 @@ static int dlfb_is_valid_mode(struct fb_videomode *mode,
 		return 0;
 	}
 
-	dl_warn("mode %dx%d valid\n", mode->xres, mode->yres);
+	dl_info("mode %dx%d valid\n", mode->xres, mode->yres);
 
 	return 1;
 }
@@ -1368,7 +1368,7 @@ static int dlfb_parse_vendor_descriptor(struct dlfb_data *dev,
 			case 0x0200: { /* max_area */
 				u32 max_area;
 				max_area = le32_to_cpu(*((u32 *)desc));
-				dl_err("DisplayLink chip limited to %d pixels\n", max_area);
+				dl_warn("DisplayLink chip limited to %d pixels\n", max_area);
 				dev->sku_pixel_limit = max_area;
 				break;
 			}
@@ -1422,9 +1422,9 @@ static int dlfb_usb_probe(struct usb_interface *interface,
 	dev->gdev = &usbdev->dev; /* our generic struct device * */
 	usb_set_intfdata(interface, dev);
 
-	dl_warn("%s %s Serial %s\n",
+	dl_info("%s %s Serial %s\n",
 		usbdev->manufacturer, usbdev->product, usbdev->serial);
-	dl_warn("vid_%04x&pid_%04x&rev_%04x\n",
+	dl_info("vid_%04x&pid_%04x&rev_%04x\n",
 		usbdev->descriptor.idVendor, usbdev->descriptor.idProduct,
 		usbdev->descriptor.bcdDevice);
 
@@ -1503,7 +1503,7 @@ static int dlfb_usb_probe(struct usb_interface *interface,
 	 */
 	dev->backing_buffer = vmalloc(videomemorysize);
 	if (!dev->backing_buffer)
-		dl_warn("No shadow/backing buffer allcoated\n");
+		dl_info("No shadow/backing buffer allcoated\n");
 	else
 		memset(dev->backing_buffer, 0, videomemorysize);
 
@@ -1544,7 +1544,7 @@ static int dlfb_usb_probe(struct usb_interface *interface,
 
 	device_create_bin_file(info->dev, &edid_attr);
 
-	dl_err("DisplayLink USB device /dev/fb%d attached. %dx%d resolution."
+	dl_info("DisplayLink USB device /dev/fb%d attached. %dx%d resolution."
 			" Using %dK framebuffer memory\n", info->node,
 			var->xres, var->yres,
 			((dev->backing_buffer) ?
