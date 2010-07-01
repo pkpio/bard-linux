@@ -1120,6 +1120,7 @@ static int dlfb_parse_edid(struct dlfb_data *dev,
 	if (default_vmode != NULL) {
 		fb_videomode_to_var(var, default_vmode);
 		dlfb_var_color_format(var);
+		result = 0;
 	} else
 		result = -EINVAL;
 
