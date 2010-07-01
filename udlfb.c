@@ -858,7 +858,8 @@ static void dlfb_free(struct kref *kref)
 	struct dlfb_data *dev = container_of(kref, struct dlfb_data, kref);
 
 	/* this function will wait for all in-flight urbs to complete */
-	dlfb_free_urb_list(dev);
+	if (dev->urbs.count > 0)
+		dlfb_free_urb_list(dev);
 
 	if (dev->backing_buffer)
 		vfree(dev->backing_buffer);
@@ -1585,9 +1586,6 @@ error:
 
 		if (dev->backing_buffer)
 			vfree(dev->backing_buffer);
-
-		if (dev->urbs.count > 0)
-			dlfb_free_urb_list(dev);
 
 		kref_put(&dev->kref, dlfb_free); /* ref for framebuffer */
 		kref_put(&dev->kref, dlfb_free); /* last ref from kref_init */
