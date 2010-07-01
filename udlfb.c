@@ -1726,8 +1726,6 @@ static void dlfb_free_urb_list(struct dlfb_data *dev)
 		kfree(node);
 	}
 
-	kref_put(&dev->kref, dlfb_free);
-
 }
 
 static int dlfb_alloc_urb_list(struct dlfb_data *dev, int count, size_t size)
@@ -1776,8 +1774,6 @@ static int dlfb_alloc_urb_list(struct dlfb_data *dev, int count, size_t size)
 	sema_init(&dev->urbs.limit_sem, i);
 	dev->urbs.count = i;
 	dev->urbs.available = i;
-
-	kref_get(&dev->kref); /* released in free_render_urbs() */
 
 	dl_notice("allocated %d %d byte urbs \n", i, (int) size);
 
