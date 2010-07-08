@@ -754,7 +754,7 @@ static int dlfb_ops_ioctl(struct fb_info *info, unsigned int cmd,
 	/* TODO: Update X server to get this from sysfs instead */
 	if (cmd == DLFB_IOCTL_RETURN_EDID) {
 		char *edid = (char *)arg;
-		if (copy_to_user(edid, dev->edid, sizeof(dev->edid)))
+		if (copy_to_user(edid, dev->edid, dev->edid_size))
 			return -EFAULT;
 		return 0;
 	}
@@ -863,6 +863,9 @@ static void dlfb_free(struct kref *kref)
 
 	if (dev->backing_buffer)
 		vfree(dev->backing_buffer);
+
+	if (dev->edid)
+		kfree(dev->edid);
 
 	dl_warn("freeing dlfb_data %p\n", dev);
 
@@ -982,10 +985,26 @@ static int dlfb_ops_check_var(struct fb_var_screeninfo *var,
 static int dlfb_ops_set_par(struct fb_info *info)
 {
 	struct dlfb_data *dev = info->par;
+	int result;
+	u16 *pix_framebuffer;
+	int i;
 
 	dl_notice("set_par mode %dx%d\n", info->var.xres, info->var.yres);
 
-	return dlfb_set_video_mode(dev, &info->var);
+	result = dlfb_set_video_mode(dev, &info->var);
+
+	if ((result == 0) && (dev->fb_count == 0)) {
+
+		/* paint greenscreen */
+		pix_framebuffer = (u16 *) info->screen_base;
+		for (i = 0; i < info->fix.smem_len / 2; i++)
+			pix_framebuffer[i] = 0x37e6;
+
+		dlfb_handle_damage(dev, 0, 0, info->var.xres, info->var.yres,
+				   info->screen_base);
+	}
+
+	return result;
 }
 
 /*
@@ -1034,47 +1053,153 @@ static struct fb_ops dlfb_ops = {
 	.fb_set_par = dlfb_ops_set_par,
 };
 
+
 /*
- * Calls dlfb_get_edid() to query the EDID of attached monitor via usb cmds
- * Then parses EDID into three places used by various parts of fbdev:
+ * Assumes &info->lock held by caller
+ * Assumes no active clients have framebuffer open
+ */
+static int dlfb_realloc_framebuffer(struct dlfb_data *dev, struct fb_info *info)
+{
+	int retval = -ENOMEM;
+	int old_len = info->fix.smem_len;
+	int new_len;
+	unsigned char *old_fb = info->screen_base;
+	unsigned char *new_fb;
+	unsigned char *new_back;
+
+	new_len = info->fix.line_length * info->var.yres;
+
+	if (PAGE_ALIGN(new_len) > old_len) {
+		/*
+		 * The big chunk of system memory we use as a virtual framebuffer.
+		 * TODO: Handle fbcon cursor code calling blit in interrupt context
+		 */
+		new_fb = vmalloc(new_len);
+		if (!new_fb) {
+			dl_err("Virtual framebuffer alloc failed\n");
+			goto error;
+		}
+
+		if (info->screen_base) {
+			memcpy(new_fb, old_fb, old_len);
+			vfree(info->screen_base);
+		}
+
+		info->screen_base = new_fb;
+		info->fix.smem_len = PAGE_ALIGN(new_len);
+		info->fix.smem_start = (unsigned long) new_fb;
+		info->flags = udlfb_info_flags;
+
+#ifdef FBINFO_MISC_FIRMWARE
+		info->aperture_base = info->fix.smem_start;
+		info->aperture_size = info->fix.smem_len;
+#endif
+
+		/*
+		 * Second framebuffer copy, mirroring the state of the framebuffer
+		 * on the physical USB device. We can function without this.
+		 * But with imperfect damage info we may end up sending pixels over USB
+		 * that were, in fact, unchanged -- wasting limited USB bandwidth
+		 */
+		new_back = vmalloc(new_len);
+		if (!new_back)
+			dl_info("No shadow/backing buffer allcoated\n");
+		else {
+			if (dev->backing_buffer)
+				vfree(dev->backing_buffer);
+			dev->backing_buffer = new_back;
+			memset(dev->backing_buffer, 0, new_len);
+		}
+	}
+
+	retval = 0;
+
+error:
+	return retval;
+}
+
+/*
+ * 1) Get EDID from hw, or use sw default
+ * 2) Parse into various fb_info structs
+ * 3) Allocate virtual framebuffer memory to back highest res mode
+ *
+ * Parses EDID into three places used by various parts of fbdev:
  * fb_var_screeninfo contains the timing of the monitor's preferred mode
  * fb_info.monspecs is full parsed EDID info, including monspecs.modedb
  * fb_info.modelist is a linked list of all monitor & VESA modes which work
  *
  * If EDID is not readable/valid, then modelist is all VESA modes,
  * monspecs is NULL, and fb_var_screeninfo is set to safe VESA mode
- * Returns 0 if EDID parses successfully
+ * Returns 0 if successful
  */
-static int dlfb_parse_edid(struct dlfb_data *dev,
-			    struct fb_var_screeninfo *var,
-			    struct fb_info *info)
+static int dlfb_setup_modes(struct dlfb_data *dev,
+			   struct fb_info *info,
+			   char *default_edid, size_t default_edid_size)
 {
 	int i;
 	const struct fb_videomode *default_vmode = NULL;
 	int result = 0;
-        char edid[sizeof(dev->edid)];
-	int tries = 10;
+        char *edid;
+	int tries = 3;
+
+	if (info->dev) /* only use mutex if info has been registered */
+		mutex_lock(&info->lock);
+
+	edid = kmalloc(MAX_EDID_SIZE, GFP_KERNEL);
+	if (!edid) {
+		result = -ENOMEM;
+		goto error;
+	}
 
 	fb_destroy_modelist(&info->modelist);
 	memset(&info->monspecs, 0, sizeof(info->monspecs));
 
 	/*
-	 * Have hit cases where EDID data is returned, but doesn't parse as valid
+	 * Try to (re)read EDID from hardware first
+	 * EDID data may return, but not parse as valid
 	 * Try again a few times, in case of e.g. analog cable noise
 	 */
 	while (tries--) {
 
-		i = dlfb_get_edid(dev, edid, sizeof(dev->edid));
+		i = dlfb_get_edid(dev, edid, MAX_EDID_SIZE);
 
-		if (i >= 128)
-			memcpy(dev->edid, edid, min(i, (int) sizeof(dev->edid)));
+		if (i >= MIN_EDID_SIZE)
+			fb_edid_to_monspecs(edid, &info->monspecs);
 
-		fb_edid_to_monspecs(dev->edid, &info->monspecs);
-
-		if (info->monspecs.modedb_len > 0)
+		if (info->monspecs.modedb_len > 0) {
+			dev->edid = edid;
+			dev->edid_size = i;
 			break;
+		}
 	}
 
+	/* If that fails, use a previously returned EDID if available */
+	if (info->monspecs.modedb_len == 0) {
+
+		dl_err("Unable to get valid EDID from device/display\n");
+
+		if (dev->edid) {
+			fb_edid_to_monspecs(dev->edid, &info->monspecs);
+			if (info->monspecs.modedb_len > 0) {
+				dl_err("Using previously queried EDID\n");
+			}
+		}
+	}
+
+	/* If that fails, use the default EDID we were handed */
+	if (info->monspecs.modedb_len == 0) {
+		if (default_edid_size >= MIN_EDID_SIZE) {
+			fb_edid_to_monspecs(default_edid, &info->monspecs);
+			if (info->monspecs.modedb_len > 0) {
+				memcpy(edid, default_edid, default_edid_size);
+				dev->edid = edid;
+				dev->edid_size = default_edid_size;
+				dl_err("Using default/backup EDID\n");
+			}
+		}
+	}
+
+	/* If we've got modes, let's pick a best default mode */
 	if (info->monspecs.modedb_len > 0) {
 
 		for (i = 0; i < info->monspecs.modedb_len; i++) {
@@ -1087,11 +1212,12 @@ static int dlfb_parse_edid(struct dlfb_data *dev,
 
 		default_vmode = fb_find_best_display(&info->monspecs,
 						     &info->modelist);
-	} else {
-		struct fb_videomode fb_vmode = {0};
+	}
 
-		dl_err("Unable to get valid EDID from device/display\n");
-		result = 1;
+	/* If everything else has failed, fall back to safe default mode */
+	if (default_vmode == NULL) {
+
+		struct fb_videomode fb_vmode = {0};
 
 		/*
 		 * Add the standard VESA modes to our modelist
@@ -1117,12 +1243,29 @@ static int dlfb_parse_edid(struct dlfb_data *dev,
 						     &info->modelist);
 	}
 
-	if (default_vmode != NULL) {
-		fb_videomode_to_var(var, default_vmode);
-		dlfb_var_color_format(var);
-		result = 0;
+	/* If we have good mode and no active clients*/
+	if ((default_vmode != NULL) && (dev->fb_count == 0)){
+
+		fb_videomode_to_var(&info->var, default_vmode);
+		dlfb_var_color_format(&info->var);
+
+		/*
+		 * ok, now that we've got the size info, we can alloc our framebuffer.
+		 */
+		memcpy(&info->fix, &dlfb_fix, sizeof(dlfb_fix));
+		info->fix.line_length = info->var.xres * (info->var.bits_per_pixel / 8);
+
+		result = dlfb_realloc_framebuffer(dev, info);
+
 	} else
 		result = -EINVAL;
+
+error:
+	if (edid && (dev->edid != edid))
+		kfree(edid);
+
+	if (info->dev)
+		mutex_unlock(&info->lock);
 
 	return result;
 }
@@ -1187,19 +1330,44 @@ static ssize_t edid_show(struct kobject *kobj, struct bin_attribute *a,
 	struct device *fbdev = container_of(kobj, struct device, kobj);
 	struct fb_info *fb_info = dev_get_drvdata(fbdev);
 	struct dlfb_data *dev = fb_info->par;
-	char *edid = &dev->edid[0];
-	const size_t size = sizeof(dev->edid);
 
-	if (off >= size)
+	if (dev->edid == NULL)
 		return 0;
 
-	if (off + count > size)
-		count = size - off;
-	memcpy(buf, edid + off, count);
+	if ((off >= dev->edid_size) || (count > dev->edid_size))
+		return 0;
+
+	if (off + count > dev->edid_size)
+		count = dev->edid_size - off;
+
+	dl_info("sysfs edid copy %p to %p, %d bytes\n", dev->edid, buf, count);
+
+	memcpy(buf, dev->edid, count);
 
 	return count;
 }
 
+static ssize_t edid_store(struct kobject *kobj, struct bin_attribute *a,
+			 char *src, loff_t src_off, size_t src_size) {
+	struct device *fbdev = container_of(kobj, struct device, kobj);
+	struct fb_info *fb_info = dev_get_drvdata(fbdev);
+	struct dlfb_data *dev = fb_info->par;
+
+	/* We only support write of entire EDID at once, no offset*/
+	if ((src_size < MIN_EDID_SIZE) ||
+	    (src_size > MAX_EDID_SIZE) ||
+	    (src_off != 0))
+		return 0;
+
+	dlfb_setup_modes(dev, fb_info, src, src_size);
+
+	if (dev->edid && (memcmp(src, dev->edid, src_size) == 0)) {
+		dl_info("sysfs written EDID is new default\n");
+		dlfb_ops_set_par(fb_info);
+		return src_size;
+	} else
+		return 0;
+}
 
 static ssize_t metrics_reset_store(struct device *fbdev,
 			   struct device_attribute *attr,
@@ -1247,9 +1415,10 @@ static ssize_t use_defio_store(struct device *fbdev,
 
 static struct bin_attribute edid_attr = {
 	.attr.name = "edid",
-	.attr.mode = 0444,
-	.size = 128,
+	.attr.mode = 0666,
+	.size = MAX_EDID_SIZE,
 	.read = edid_show,
+	.write = edid_store
 };
 
 static struct device_attribute fb_device_attrs[] = {
@@ -1408,19 +1577,14 @@ success:
 	kfree(buf);
 	return true;
 }
-
 static int dlfb_usb_probe(struct usb_interface *interface,
 			const struct usb_device_id *id)
 {
 	struct usb_device *usbdev;
 	struct dlfb_data *dev = 0;
 	struct fb_info *info = 0;
-	int videomemorysize;
-	int i;
-	unsigned char *videomemory;
 	int retval = -ENOMEM;
-	struct fb_var_screeninfo *var;
-	u16 *pix_framebuffer;
+	int i;
 
 	/* usb initialization */
 
@@ -1445,6 +1609,9 @@ static int dlfb_usb_probe(struct usb_interface *interface,
 	dl_info("vid_%04x&pid_%04x&rev_%04x driver's dlfb_data struct at %p\n",
 		usbdev->descriptor.idVendor, usbdev->descriptor.idProduct,
 		usbdev->descriptor.bcdDevice, dev);
+
+
+	dev->sku_pixel_limit = 2048 * 1152; /* default to maximum */
 
 	if (!dlfb_parse_vendor_descriptor(dev, usbdev)) {
 		dl_err("firmware not recognized. Assuming incompatible device\n");
@@ -1472,63 +1639,19 @@ static int dlfb_usb_probe(struct usb_interface *interface,
 	info->pseudo_palette = dev->pseudo_palette;
 	info->fbops = &dlfb_ops;
 
-	var = &info->var;
-
-	INIT_DELAYED_WORK(&dev->free_framebuffer_work, dlfb_free_framebuffer_work);
-
-	/* If we didn't figure this out earlier, set to highest possible */
-	if (dev->sku_pixel_limit == 0)
-		dev->sku_pixel_limit = 2048 * 1152;
-
-	INIT_LIST_HEAD(&info->modelist);
-	retval = dlfb_parse_edid(dev, var, info);
-	if (retval != 0) {
-		dl_err("unable to find mode match between display and adapter\n");
-		goto error;
-	}
-	/*
-	 * ok, now that we've got the size info, we can alloc our framebuffer.
-	 */
-	info->fix = dlfb_fix;
-	info->fix.line_length = var->xres * (var->bits_per_pixel / 8);
-	videomemorysize = info->fix.line_length * var->yres;
-
-	/*
-	 * The big chunk of system memory we use as a virtual framebuffer.
-	 * TODO: Handle fbcon cursor code calling blit in interrupt context
-	 */
-	videomemory = vmalloc(videomemorysize);
-	if (!videomemory) {
-		retval = -ENOMEM;
-		dl_err("Virtual framebuffer alloc failed\n");
-		goto error;
-	}
-
-	info->screen_base = videomemory;
-	info->fix.smem_len = PAGE_ALIGN(videomemorysize);
-	info->fix.smem_start = (unsigned long) videomemory;
-	info->flags = udlfb_info_flags;
-
-#ifdef FBINFO_MISC_FIRMWARE
-	info->aperture_base = info->fix.smem_start;
-	info->aperture_size = info->fix.smem_len;
-#endif
-
-	/*
-	 * Second framebuffer copy, mirroring the state of the framebuffer
-	 * on the physical USB device. We can function without this.
-	 * But with imperfect damage info we may end up sending pixels over USB
-	 * that were, in fact, unchanged -- wasting limited USB bandwidth
-	 */
-	dev->backing_buffer = vmalloc(videomemorysize);
-	if (!dev->backing_buffer)
-		dl_info("No shadow/backing buffer allcoated\n");
-	else
-		memset(dev->backing_buffer, 0, videomemorysize);
-
 	retval = fb_alloc_cmap(&info->cmap, 256, 0);
 	if (retval < 0) {
 		dl_err("fb_alloc_cmap failed %x\n", retval);
+		goto error;
+	}
+
+	INIT_DELAYED_WORK(&dev->free_framebuffer_work, dlfb_free_framebuffer_work);
+
+	INIT_LIST_HEAD(&info->modelist);
+
+	retval = dlfb_setup_modes(dev, info, NULL, 0);
+	if (retval != 0) {
+		dl_err("unable to find mode match between display and adapter\n");
 		goto error;
 	}
 
@@ -1540,16 +1663,8 @@ static int dlfb_usb_probe(struct usb_interface *interface,
 	atomic_set(&dev->usb_active, 1);
 	dlfb_select_std_channel(dev);
 
-	dlfb_ops_check_var(var, info);
+	dlfb_ops_check_var(&info->var, info);
 	dlfb_ops_set_par(info);
-
-	/* paint greenscreen */
-	pix_framebuffer = (u16 *) videomemory;
-	for (i = 0; i < videomemorysize / 2; i++)
-		pix_framebuffer[i] = 0x37e6;
-
-	dlfb_handle_damage(dev, 0, 0, info->var.xres, info->var.yres,
-				videomemory);
 
 	retval = register_framebuffer(info);
 	if (retval < 0) {
@@ -1564,9 +1679,9 @@ static int dlfb_usb_probe(struct usb_interface *interface,
 
 	dl_info("DisplayLink USB device /dev/fb%d attached. %dx%d resolution."
 			" Using %dK framebuffer memory\n", info->node,
-			var->xres, var->yres,
+			info->var.xres, info->var.yres,
 			((dev->backing_buffer) ?
-			videomemorysize * 2 : videomemorysize) >> 10);
+			info->fix.smem_len * 2 : info->fix.smem_len) >> 10);
 	return 0;
 
 error:
@@ -1603,11 +1718,10 @@ static void dlfb_usb_disconnect(struct usb_interface *interface)
 	struct fb_info *info;
 	int i;
 
+	dl_info("USB disconnect starting\n");
+
 	dev = usb_get_intfdata(interface);
 	info = dev->info;
-
-	/* synchronize with fb_ops_open and release */
-	mutex_lock(&info->lock);
 
 	/* we virtualize until all fb clients release. Then we free */
 	dev->virtualized = true;
@@ -1622,9 +1736,7 @@ static void dlfb_usb_disconnect(struct usb_interface *interface)
 
 	usb_set_intfdata(interface, NULL);
 
-	mutex_unlock(&info->lock);
-
-	/* We know fb_count won't change because virtualized flag set under lock */
+	/* if clients still have us open, will be freed on last close */
 	if (dev->fb_count == 0)
 		schedule_delayed_work(&dev->free_framebuffer_work, 0);
 
