@@ -1814,12 +1814,12 @@ static void dlfb_free_urb_list(struct dlfb_data *dev)
 
 	/* keep waiting and freeing, until we've got 'em all */
 	while (count--) {
-		/* Timeout means a memory leak and/or fault */
-		ret = down_timeout(&dev->urbs.limit_sem, FREE_URB_TIMEOUT);
-		if (ret) {
-			BUG_ON(ret);
+
+		/* Getting interrupted means a leak, but ok at shutdown*/
+		ret = down_interruptible(&dev->urbs.limit_sem);
+		if (ret)
 			break;
-		}
+
 		spin_lock_irqsave(&dev->urbs.lock, flags);
 
 		node = dev->urbs.list.next; /* have reserved one with sem */
