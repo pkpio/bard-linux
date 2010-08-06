@@ -1097,7 +1097,8 @@ static int dlfb_realloc_framebuffer(struct dlfb_data *dev, struct fb_info *info)
 		info->fix.smem_start = (unsigned long) new_fb;
 		info->flags = udlfb_info_flags;
 
-#ifdef FBINFO_MISC_FIRMWARE
+/* For a range of kernels, must set these to workaround bad aperature logic */
+#if (defined(FBINFO_MISC_FIRMWARE) && !defined(alloc_aperatures))
 		info->aperture_base = info->fix.smem_start;
 		info->aperture_size = info->fix.smem_len;
 #endif
