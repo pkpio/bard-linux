@@ -99,6 +99,9 @@ static void dlfb_free_urb_list(struct dlfb_data *dev);
 static struct fb_deferred_io dlfb_defio;
 #endif
 
+/* module options */
+static int console = 0;   /* Allow fbcon to consume first framebuffer */
+
 /*
  * All DisplayLink bulk operations start with 0xAF, followed by specific code
  * All operations are written to buffers which then later get sent to device
@@ -822,9 +825,13 @@ static int dlfb_ops_open(struct fb_info *info, int user)
 {
 	struct dlfb_data *dev = info->par;
 
-/*	if (user == 0)
- *		We could special case kernel mode clients (fbcon) here
- */
+	/*
+	 * fbcon aggressively connects to first framebuffer it finds,
+	 * preventing other clients (X) from working properly. Usually
+	 * not what the user wants. Fail by default with option to enable.
+	 */
+	if ((user == 0) & (!console))
+		return -EBUSY;
 
 	/* If the USB device is gone, we don't accept new opens */
 	if (dev->virtualized)
@@ -1938,6 +1945,9 @@ static int dlfb_submit_urb(struct dlfb_data *dev, struct urb *urb, size_t len)
 	}
 	return ret;
 }
+
+module_param(console, bool, 0);
+MODULE_PARM_DESC(console, "Allow fbcon to connect & consume first framebuffer");
 
 MODULE_AUTHOR("Roberto De Ioris <roberto@unbit.it>, "
 	      "Jaya Kumar <jayakumar.lkml@gmail.com>, "
