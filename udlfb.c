@@ -26,6 +26,7 @@
 #include <linux/vmalloc.h>
 #include <linux/slab.h>
 #include <linux/delay.h>
+#include <linux/version.h> /* many users build as module against old kernels*/
 
 #include "udlfb.h"
 
@@ -1333,7 +1334,11 @@ static ssize_t metrics_misc_show(struct device *fbdev,
 			atomic_read(&dev->lost_pixels) ? "yes" : "no");
 }
 
-static ssize_t edid_show(struct kobject *kobj, struct bin_attribute *a,
+static ssize_t edid_show(
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 35)
+	                 struct file *filp,
+#endif
+	                 struct kobject *kobj, struct bin_attribute *a,
 			 char *buf, loff_t off, size_t count) {
 	struct device *fbdev = container_of(kobj, struct device, kobj);
 	struct fb_info *fb_info = dev_get_drvdata(fbdev);
@@ -1355,7 +1360,11 @@ static ssize_t edid_show(struct kobject *kobj, struct bin_attribute *a,
 	return count;
 }
 
-static ssize_t edid_store(struct kobject *kobj, struct bin_attribute *a,
+static ssize_t edid_store(
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 35)
+	                 struct file *filp,
+#endif
+			 struct kobject *kobj, struct bin_attribute *a,
 			 char *src, loff_t src_off, size_t src_size) {
 	struct device *fbdev = container_of(kobj, struct device, kobj);
 	struct fb_info *fb_info = dev_get_drvdata(fbdev);
