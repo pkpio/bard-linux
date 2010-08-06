@@ -1348,7 +1348,7 @@ static ssize_t edid_show(struct kobject *kobj, struct bin_attribute *a,
 	if (off + count > dev->edid_size)
 		count = dev->edid_size - off;
 
-	dl_info("sysfs edid copy %p to %p, %d bytes\n", dev->edid, buf, count);
+	dl_info("sysfs edid copy %p to %p, %d bytes\n", dev->edid, buf, (int) count);
 
 	memcpy(buf, dev->edid, count);
 
