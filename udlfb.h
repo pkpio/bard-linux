@@ -118,7 +118,8 @@ struct dlfb_data {
 	pr_info("udlfb: " format, ## arg)
 #endif
 
-#if !defined(usb_alloc_coherent)
+/* Let people on older kernels build udlfb as a module */
+#if LINUX_VERSION_CODE <= KERNEL_VERSION(2, 6, 33)
 #define usb_alloc_coherent usb_buffer_alloc
 #define usb_free_coherent usb_buffer_free
 #endif
