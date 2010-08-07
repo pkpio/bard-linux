@@ -1098,8 +1098,15 @@ static int dlfb_realloc_framebuffer(struct dlfb_data *dev, struct fb_info *info)
 		info->fix.smem_start = (unsigned long) new_fb;
 		info->flags = udlfb_info_flags;
 
-/* For a range of kernels, must set these to workaround bad aperature logic */
-#if (defined(FBINFO_MISC_FIRMWARE) && !defined(alloc_aperatures))
+/*
+ * For a range of kernels, must set these to workaround bad logic
+ * that assumes all framebuffers are using PCI aperture.
+ * If we don't do this, when we call register_framebuffer, fbmem.c will
+ * forcibly unregister other framebuffers with smem_start of zero.  And
+ * that's most of them (VESA, EFI, etc).
+ */
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 32) && \
+	LINUX_VERSION_CODE <= KERNEL_VERSION(2, 6, 34))
 		info->aperture_base = info->fix.smem_start;
 		info->aperture_size = info->fix.smem_len;
 #endif
