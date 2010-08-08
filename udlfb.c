@@ -1926,7 +1926,7 @@ static int dlfb_submit_urb(struct dlfb_data *dev, struct urb *urb, size_t len)
 	return ret;
 }
 
-module_param(console, bool, 0);
+module_param(console, bool, S_IWUSR | S_IRUSR | S_IWGRP | S_IRGRP);
 MODULE_PARM_DESC(console, "Allow fbcon to connect & consume first framebuffer");
 
 MODULE_AUTHOR("Roberto De Ioris <roberto@unbit.it>, "
