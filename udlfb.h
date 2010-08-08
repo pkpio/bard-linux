@@ -117,3 +117,5 @@ struct dlfb_data {
 #define usb_alloc_coherent usb_buffer_alloc
 #define usb_free_coherent usb_buffer_free
 #endif
+
+#endif
