@@ -110,7 +110,6 @@ struct dlfb_data {
 	pr_notice("udlfb: " format, ## arg)
 #define dl_info(format, arg...) \
 	pr_info("udlfb: " format, ## arg)
-#endif
 
 /* Let people on older kernels build udlfb as a module */
 #if LINUX_VERSION_CODE <= KERNEL_VERSION(2, 6, 33)
