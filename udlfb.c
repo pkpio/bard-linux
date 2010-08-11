@@ -67,24 +67,33 @@ MODULE_DEVICE_TABLE(usb, id_table);
  * When rebuilding entire kernel, our Kconfig should pull in everything we need.
  */
 
-#ifndef CONFIG_FB_DEFERRED_IO
-#warning Kernel CONFIG_FB_DEFERRED_IO required to enable udlfb 'defio' option
-#endif
+/*
+ * defio/udlfb path is too buggy at this time, in paticular
+ * 1) intermittant kernel oops where unmapped page is passed to be rendered
+ * 2) over time, pages stop triggering faults, accumulate dead lines on screen
+ * 3) with several devices attached, wrong fb gets notified of dirty page
+ */
+#undef CONFIG_FB_DEFERRED_IO
+/*
+ * #ifndef CONFIG_FB_DEFERRED_IO
+ * #warning Please enable CONFIG_FB_DEFERRED_IO to support generic fbdev apps
+ * #endif
+ */
 
 #ifndef CONFIG_FB_SYS_IMAGEBLIT
 #ifndef CONFIG_FB_SYS_IMAGEBLIT_MODULE
-#warning Kernel CONFIG_FB_SYS_IMAGEBLIT required for udlfb 'console' option
+#warning Please set CONFIG_FB_SYS_IMAGEBLIT option to support fb console
 #endif
 #endif
 
 #ifndef CONFIG_FB_SYS_FOPS
 #ifndef CONFIG_FB_SYS_FOPS_MODULE
-#warning Kernel FB_SYS_FOPS required to support filesystem char dev access
+#warning FB_SYS_FOPS kernel support required for filesystem char dev access
 #endif
 #endif
 
 #ifndef CONFIG_FB_MODE_HELPERS
-#warning Kernel build option CONFIG_FB_MODE_HELPERS required. Expect build break
+#warning CONFIG_FB_MODE_HELPERS required. Expect build break
 #endif
 
 /* dlfb keeps a list of urbs for efficient bulk transfers */
@@ -101,7 +110,6 @@ static struct fb_deferred_io dlfb_defio;
 
 /* module options */
 static int console = 0;   /* Allow fbcon to consume first framebuffer */
-static int defio = 0;     /* Make use of FB_DEFERRED_IO support */
 
 /*
  * All DisplayLink bulk operations start with 0xAF, followed by specific code
@@ -776,6 +784,8 @@ static int dlfb_ops_ioctl(struct fb_info *info, unsigned int cmd,
 		if (area->y > info->var.yres)
 			area->y = info->var.yres;
 
+		atomic_set(&dev->use_defio, 0);
+
 		dlfb_handle_damage(dev, area->x, area->y, area->w, area->h,
 			   info->screen_base);
 	}
@@ -836,7 +846,7 @@ static int dlfb_ops_open(struct fb_info *info, int user)
 	kref_get(&dev->kref);
 
 #ifdef CONFIG_FB_DEFERRED_IO
-	if ((defio) && (info->fbdefio == NULL)) {
+	if ((atomic_read(&dev->use_defio)) && (info->fbdefio == NULL)) {
 		/* enable defio */
 		info->fbdefio = &dlfb_defio;
 		fb_deferred_io_init(info);
@@ -916,7 +926,7 @@ static int dlfb_ops_release(struct fb_info *info, int user)
 		schedule_delayed_work(&dev->free_framebuffer_work, HZ);
 
 #ifdef CONFIG_FB_DEFERRED_IO
-	if (defio && (dev->fb_count == 0) && (info->fbdefio)) {
+	if ((dev->fb_count == 0) && (info->fbdefio)) {
 		fb_deferred_io_cleanup(info);
 		info->fbdefio = NULL;
 		info->fbops->fb_mmap = dlfb_ops_mmap;
@@ -1378,6 +1388,30 @@ static ssize_t metrics_reset_store(struct device *fbdev,
 	return count;
 }
 
+static ssize_t use_defio_show(struct device *fbdev,
+				   struct device_attribute *a, char *buf) {
+	struct fb_info *fb_info = dev_get_drvdata(fbdev);
+	struct dlfb_data *dev = fb_info->par;
+	return snprintf(buf, PAGE_SIZE, "%d\n",
+			atomic_read(&dev->use_defio));
+}
+
+static ssize_t use_defio_store(struct device *fbdev,
+			   struct device_attribute *attr,
+			   const char *buf, size_t count)
+{
+	struct fb_info *fb_info = dev_get_drvdata(fbdev);
+	struct dlfb_data *dev = fb_info->par;
+
+	if (count > 0) {
+		if (buf[0] == '0')
+			atomic_set(&dev->use_defio, 0);
+		if (buf[0] == '1')
+			atomic_set(&dev->use_defio, 1);
+	}
+	return count;
+}
+
 static struct bin_attribute edid_attr = {
 	.attr.name = "edid",
 	.attr.mode = 0666,
@@ -1392,6 +1426,7 @@ static struct device_attribute fb_device_attrs[] = {
 	__ATTR_RO(metrics_bytes_sent),
 	__ATTR_RO(metrics_cpu_kcycles_used),
 	__ATTR(metrics_reset, S_IWUGO, NULL, metrics_reset_store),
+	__ATTR_RW(use_defio),
 };
 
 #ifdef CONFIG_FB_DEFERRED_IO
@@ -1408,7 +1443,7 @@ static void dlfb_dpy_deferred_io(struct fb_info *info,
 	int bytes_identical = 0;
 	int bytes_rendered = 0;
 
-	if (!defio)
+	if (!atomic_read(&dev->use_defio))
 		return;
 
 	if (!atomic_read(&dev->usb_active))
@@ -1617,6 +1652,9 @@ static int dlfb_usb_probe(struct usb_interface *interface,
 
 	/* ready to begin using device */
 
+#ifdef CONFIG_FB_DEFERRED_IO
+	atomic_set(&dev->use_defio, 1);
+#endif
 	atomic_set(&dev->usb_active, 1);
 	dlfb_select_std_channel(dev);
 
