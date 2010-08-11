@@ -109,7 +109,7 @@ static struct fb_deferred_io dlfb_defio;
 #endif
 
 /* module options */
-static int console = 0;   /* Allow fbcon to consume first framebuffer */
+static int console;   /* Optionally allow fbcon to consume first framebuffer */
 
 /*
  * All DisplayLink bulk operations start with 0xAF, followed by specific code
@@ -736,7 +736,7 @@ static int dlfb_get_edid(struct dlfb_data *dev, char *edid, int len)
 				    usb_rcvctrlpipe(dev->udev, 0), (0x02),
 				    (0x80 | (0x02 << 5)), i << 8, 0xA1, rbuf, 2,
 				    HZ);
-                if (ret < 1) {
+		if (ret < 1) {
 			dl_err("Read EDID byte %d failed err %x\n", i, ret);
 			i--;
 			break;
@@ -875,8 +875,7 @@ static void dlfb_free(struct kref *kref)
 	if (dev->backing_buffer)
 		vfree(dev->backing_buffer);
 
-	if (dev->edid)
-		kfree(dev->edid);
+	kfree(dev->edid);
 
 	dl_warn("freeing dlfb_data %p\n", dev);
 
@@ -921,7 +920,7 @@ static int dlfb_ops_release(struct fb_info *info, int user)
 
 	dev->fb_count--;
 
-	/* We can't free fb_info here, because fbmem will touch it when we return */
+	/* We can't free fb_info here - fbmem will touch it when we return */
 	if (dev->virtualized && (dev->fb_count == 0))
 		schedule_delayed_work(&dev->free_framebuffer_work, HZ);
 
@@ -1082,8 +1081,7 @@ static int dlfb_realloc_framebuffer(struct dlfb_data *dev, struct fb_info *info)
 
 	if (PAGE_ALIGN(new_len) > old_len) {
 		/*
-		 * The big chunk of system memory we use as a virtual framebuffer.
-		 * TODO: Handle fbcon cursor code calling blit in interrupt context
+		 * Alloc system memory for virtual framebuffer
 		 */
 		new_fb = vmalloc(new_len);
 		if (!new_fb) {
@@ -1115,10 +1113,10 @@ static int dlfb_realloc_framebuffer(struct dlfb_data *dev, struct fb_info *info)
 #endif
 
 		/*
-		 * Second framebuffer copy, mirroring the state of the framebuffer
+		 * Second framebuffer copy to mirror the framebuffer state
 		 * on the physical USB device. We can function without this.
-		 * But with imperfect damage info we may end up sending pixels over USB
-		 * that were, in fact, unchanged -- wasting limited USB bandwidth
+		 * But with imperfect damage info we may send pixels over USB
+		 * that were, in fact, unchanged - wasting limited USB bandwidth
 		 */
 		new_back = vmalloc(new_len);
 		if (!new_back)
@@ -1158,7 +1156,7 @@ static int dlfb_setup_modes(struct dlfb_data *dev,
 	int i;
 	const struct fb_videomode *default_vmode = NULL;
 	int result = 0;
-        char *edid;
+	char *edid;
 	int tries = 3;
 
 	if (info->dev) /* only use mutex if info has been registered */
@@ -1199,9 +1197,8 @@ static int dlfb_setup_modes(struct dlfb_data *dev,
 
 		if (dev->edid) {
 			fb_edid_to_monspecs(dev->edid, &info->monspecs);
-			if (info->monspecs.modedb_len > 0) {
+			if (info->monspecs.modedb_len > 0)
 				dl_err("Using previously queried EDID\n");
-			}
 		}
 	}
 
@@ -1263,16 +1260,17 @@ static int dlfb_setup_modes(struct dlfb_data *dev,
 	}
 
 	/* If we have good mode and no active clients*/
-	if ((default_vmode != NULL) && (dev->fb_count == 0)){
+	if ((default_vmode != NULL) && (dev->fb_count == 0)) {
 
 		fb_videomode_to_var(&info->var, default_vmode);
 		dlfb_var_color_format(&info->var);
 
 		/*
-		 * ok, now that we've got the size info, we can alloc our framebuffer.
+		 * with mode size info, we can now alloc our framebuffer.
 		 */
 		memcpy(&info->fix, &dlfb_fix, sizeof(dlfb_fix));
-		info->fix.line_length = info->var.xres * (info->var.bits_per_pixel / 8);
+		info->fix.line_length = info->var.xres *
+			(info->var.bits_per_pixel / 8);
 
 		result = dlfb_realloc_framebuffer(dev, info);
 
@@ -1323,10 +1321,10 @@ static ssize_t metrics_cpu_kcycles_used_show(struct device *fbdev,
 
 static ssize_t edid_show(
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 35)
-	                 struct file *filp,
+			struct file *filp,
 #endif
-	                 struct kobject *kobj, struct bin_attribute *a,
-			 char *buf, loff_t off, size_t count) {
+			struct kobject *kobj, struct bin_attribute *a,
+			char *buf, loff_t off, size_t count) {
 	struct device *fbdev = container_of(kobj, struct device, kobj);
 	struct fb_info *fb_info = dev_get_drvdata(fbdev);
 	struct dlfb_data *dev = fb_info->par;
@@ -1340,7 +1338,8 @@ static ssize_t edid_show(
 	if (off + count > dev->edid_size)
 		count = dev->edid_size - off;
 
-	dl_info("sysfs edid copy %p to %p, %d bytes\n", dev->edid, buf, (int) count);
+	dl_info("sysfs edid copy %p to %p, %d bytes\n",
+		dev->edid, buf, (int) count);
 
 	memcpy(buf, dev->edid, count);
 
@@ -1349,10 +1348,10 @@ static ssize_t edid_show(
 
 static ssize_t edid_store(
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 35)
-	                 struct file *filp,
+			struct file *filp,
 #endif
-			 struct kobject *kobj, struct bin_attribute *a,
-			 char *src, loff_t src_off, size_t src_size) {
+			struct kobject *kobj, struct bin_attribute *a,
+			char *src, loff_t src_off, size_t src_size) {
 	struct device *fbdev = container_of(kobj, struct device, kobj);
 	struct fb_info *fb_info = dev_get_drvdata(fbdev);
 	struct dlfb_data *dev = fb_info->par;
@@ -1522,11 +1521,12 @@ static int dlfb_parse_vendor_descriptor(struct dlfb_data *dev,
 
 	total_len = usb_get_descriptor(usbdev, 0x5f, /* vendor specific */
 				    0, desc, MAX_VENDOR_DESCRIPTOR_SIZE);
-        if (total_len > 5) {
-		dl_info("vendor descriptor length:%x data:%02x %02x %02x %02x %02x " \
-		       "%02x %02x %02x %02x %02x %02x\n", total_len, desc[0],
-		       desc[1], desc[2], desc[3], desc[4], desc[5], desc[6],
-		       desc[7], desc[8], desc[9], desc[10]);
+	if (total_len > 5) {
+		dl_info("vendor descriptor length:%x data:%02x %02x %02x %02x" \
+			"%02x %02x %02x %02x %02x %02x %02x\n",
+			total_len, desc[0],
+			desc[1], desc[2], desc[3], desc[4], desc[5], desc[6],
+			desc[7], desc[8], desc[9], desc[10]);
 
 		if ((desc[0] != total_len) || /* descriptor length */
 		    (desc[1] != 0x5f) ||   /* vendor descriptor type */
@@ -1551,7 +1551,8 @@ static int dlfb_parse_vendor_descriptor(struct dlfb_data *dev,
 			case 0x0200: { /* max_area */
 				u32 max_area;
 				max_area = le32_to_cpu(*((u32 *)desc));
-				dl_warn("DisplayLink chip limited to %d pixels\n", max_area);
+				dl_warn("DL chip limited to %d pixel modes\n",
+					max_area);
 				dev->sku_pixel_limit = max_area;
 				break;
 			}
@@ -1593,7 +1594,7 @@ static int dlfb_usb_probe(struct usb_interface *interface,
 
 	/* we need to wait for both usb and fbdev to spin down on disconnect */
 	kref_init(&dev->kref); /* matching kref_put in usb .disconnect fn */
-	kref_get(&dev->kref); /* matching kref_put in free_framebuffer_work function*/
+	kref_get(&dev->kref); /* matching kref_put in free_framebuffer_work */
 
 	dev->udev = usbdev;
 	dev->gdev = &usbdev->dev; /* our generic struct device * */
@@ -1609,7 +1610,7 @@ static int dlfb_usb_probe(struct usb_interface *interface,
 	dev->sku_pixel_limit = 2048 * 1152; /* default to maximum */
 
 	if (!dlfb_parse_vendor_descriptor(dev, usbdev)) {
-		dl_err("firmware not recognized. Assuming incompatible device\n");
+		dl_err("firmware not recognized. Assume incompatible device\n");
 		goto error;
 	}
 
@@ -1640,13 +1641,14 @@ static int dlfb_usb_probe(struct usb_interface *interface,
 		goto error;
 	}
 
-	INIT_DELAYED_WORK(&dev->free_framebuffer_work, dlfb_free_framebuffer_work);
+	INIT_DELAYED_WORK(&dev->free_framebuffer_work,
+			  dlfb_free_framebuffer_work);
 
 	INIT_LIST_HEAD(&info->modelist);
 
 	retval = dlfb_setup_modes(dev, info, NULL, 0);
 	if (retval != 0) {
-		dl_err("unable to find mode match between display and adapter\n");
+		dl_err("unable to find common mode for display and adapter\n");
 		goto error;
 	}
 
@@ -1881,7 +1883,7 @@ static int dlfb_alloc_urb_list(struct dlfb_data *dev, int count, size_t size)
 	dev->urbs.count = i;
 	dev->urbs.available = i;
 
-	dl_notice("allocated %d %d byte urbs \n", i, (int) size);
+	dl_notice("allocated %d %d byte urbs\n", i, (int) size);
 
 	return i;
 }
