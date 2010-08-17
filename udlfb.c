@@ -596,7 +596,7 @@ int dlfb_handle_damage(struct dlfb_data *dev, int x, int y,
 		const int line_offset = dev->info->fix.line_length * i;
 		const int byte_offset = line_offset + (x * BPP);
 
-		if (dlfb_render_hline(dev, &urb, 
+		if (dlfb_render_hline(dev, &urb,
 				      (char *) dev->info->fix.smem_start,
 				      &cmd, byte_offset, width * BPP,
 				      &bytes_identical, &bytes_sent))
@@ -714,7 +714,7 @@ static void dlfb_ops_fillrect(struct fb_info *info,
 }
 
 #ifdef CONFIG_FB_DEFERRED_IO
-/* 
+/*
  * NOTE: fb_defio.c is holding info->fbdefio.mutex
  *   Touching ANY framebuffer memory that triggers a page fault
  *   in fb_defio will cause a deadlock, when it also tries to
@@ -826,7 +826,7 @@ static int dlfb_ops_ioctl(struct fb_info *info, unsigned int cmd,
 	/* TODO: Help propose a standard fb.h ioctl to report mmap damage */
 	if (cmd == DLFB_IOCTL_REPORT_DAMAGE) {
 
-		/* 
+		/*
 		 * If we have a damage-aware client, turn fb_defio "off"
 		 * To avoid perf imact of unecessary page fault handling.
 		 * Done by resetting the delay for this fb_info to a very
@@ -1796,7 +1796,7 @@ static void dlfb_urb_completion(struct urb *urb)
 	spin_unlock_irqrestore(&dev->urbs.lock, flags);
 
 	/*
-	 * When using fb_defio, we deadlock if up() is called 
+	 * When using fb_defio, we deadlock if up() is called
 	 * while another is waiting. So queue to another process.
 	 */
 	if (fb_defio)
