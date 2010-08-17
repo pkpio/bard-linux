@@ -956,10 +956,6 @@ static void dlfb_free(struct kref *kref)
 	kfree(dev);
 }
 
-/*
- * When using fb_defio, we deadlock if up() is called, while another is waiting.
- * So queue to another process.
- */
 static void dlfb_release_urb_work(struct work_struct *work)
 {
 	struct urb_node *unode = container_of(work, struct urb_node,
@@ -1799,8 +1795,14 @@ static void dlfb_urb_completion(struct urb *urb)
 	dev->urbs.available++;
 	spin_unlock_irqrestore(&dev->urbs.lock, flags);
 
-	/* up(&dev->urbs.limit_sem); */
-	schedule_delayed_work(&unode->release_urb_work, 0);
+	/*
+	 * When using fb_defio, we deadlock if up() is called 
+	 * while another is waiting. So queue to another process.
+	 */
+	if (fb_defio)
+		schedule_delayed_work(&unode->release_urb_work, 0);
+	else
+		up(&dev->urbs.limit_sem);
 }
 
 static void dlfb_free_urb_list(struct dlfb_data *dev)
