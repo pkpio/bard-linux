@@ -59,6 +59,10 @@ static struct usb_device_id id_table[] = {
 };
 MODULE_DEVICE_TABLE(usb, id_table);
 
+/* module options */
+static int console;   /* Optionally allow fbcon to consume first framebuffer */
+static int fb_defio;  /* Optionally enable experimental fb_defio mmap support */
+
 /*
  * When building as a separate module against an arbitrary kernel,
  * check on build presence of other kernel modules we have dependencies on.
@@ -94,9 +98,6 @@ static int dlfb_submit_urb(struct dlfb_data *dev, struct urb * urb, size_t len);
 static int dlfb_alloc_urb_list(struct dlfb_data *dev, int count, size_t size);
 static void dlfb_free_urb_list(struct dlfb_data *dev);
 
-/* module options */
-static int console;   /* Optionally allow fbcon to consume first framebuffer */
-static int fb_defio;  /* Optionally enable experimental fb_defio mmap support */
 /*
  * All DisplayLink bulk operations start with 0xAF, followed by specific code
  * All operations are written to buffers which then later get sent to device
@@ -623,7 +624,7 @@ error:
 	return 0;
 }
 
-static ssize_t dlfb_read(struct fb_info *info, char __user *buf,
+static ssize_t dlfb_ops_read(struct fb_info *info, char __user *buf,
 			 size_t count, loff_t *ppos)
 {
 	ssize_t result = -ENOSYS;
@@ -636,12 +637,12 @@ static ssize_t dlfb_read(struct fb_info *info, char __user *buf,
 }
 
 /*
- * dlfb_write is triggered by usermode clients who write to filesystem
+ * Path triggered by usermode clients who write to filesystem
  * e.g. cat filename > /dev/fb1
  * Not used by X Windows or text-mode console. But useful for testing.
  * Slow because of extra copy and we must assume all pixels dirty.
  */
-static ssize_t dlfb_write(struct fb_info *info, const char __user *buf,
+static ssize_t dlfb_ops_write(struct fb_info *info, const char __user *buf,
 			  size_t count, loff_t *ppos)
 {
 	ssize_t result = -ENOSYS;
@@ -1132,8 +1133,8 @@ static int dlfb_ops_blank(int blank_mode, struct fb_info *info)
 
 static struct fb_ops dlfb_ops = {
 	.owner = THIS_MODULE,
-	.fb_read = dlfb_read,
-	.fb_write = dlfb_write,
+	.fb_read = dlfb_ops_read,
+	.fb_write = dlfb_ops_write,
 	.fb_setcolreg = dlfb_ops_setcolreg,
 	.fb_fillrect = dlfb_ops_fillrect,
 	.fb_copyarea = dlfb_ops_copyarea,
@@ -1715,10 +1716,10 @@ static void dlfb_usb_disconnect(struct usb_interface *interface)
 	struct fb_info *info;
 	int i;
 
-	dl_info("USB disconnect starting\n");
-
 	dev = usb_get_intfdata(interface);
 	info = dev->info;
+
+	dl_info("USB disconnect starting\n");
 
 	/* we virtualize until all fb clients release. Then we free */
 	dev->virtualized = true;
@@ -1907,7 +1908,7 @@ static struct urb *dlfb_get_urb(struct dlfb_data *dev)
 	unsigned long flags;
 
 	/* Wait for an in-flight buffer to complete and get re-queued */
-	ret = down_timeout(&dev->urbs.limit_sem, HZ);
+	ret = down_timeout(&dev->urbs.limit_sem, GET_URB_TIMEOUT);
 	if (ret) {
 		atomic_set(&dev->lost_pixels, 1);
 		dl_warn("wait for urb interrupted: %x available: %d\n",
