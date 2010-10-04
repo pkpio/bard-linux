@@ -834,9 +834,10 @@ static int dlfb_ops_ioctl(struct fb_info *info, unsigned int cmd,
 		 * long period. Pages will become writable and stay that way.
 		 * Reset to normal value when all clients have closed this fb.
 		 */
+#ifdef CONFIG_FB_DEFERRED_IO
 		if (info->fbdefio)
 			info->fbdefio->delay = DL_DEFIO_WRITE_DISABLE;
-
+#endif
 		area = (struct dloarea *)arg;
 
 		if (area->x < 0)
