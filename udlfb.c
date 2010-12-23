@@ -54,7 +54,11 @@ static const u32 udlfb_info_flags = FBINFO_DEFAULT | FBINFO_READS_FAST |
  * "future" chips, and bail on those, so a compatible driver can match.
  */
 static struct usb_device_id id_table[] = {
-	{.idVendor = 0x17e9, .match_flags = USB_DEVICE_ID_MATCH_VENDOR,},
+	{.idVendor = 0x17e9,
+	 .bInterfaceClass = 0xff,
+	 .match_flags = USB_DEVICE_ID_MATCH_VENDOR |
+		USB_DEVICE_ID_MATCH_INT_CLASS,
+	},
 	{},
 };
 MODULE_DEVICE_TABLE(usb, id_table);
