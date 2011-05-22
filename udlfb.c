@@ -933,7 +933,7 @@ static int dlfb_ops_open(struct fb_info *info, int user)
 	 * preventing other clients (X) from working properly. Usually
 	 * not what the user wants. Fail by default with option to enable.
 	 */
-	if ((user == 0) & (!console))
+	if ((user == 0) && (!console))
 		return -EBUSY;
 
 	/* If the USB device is gone, we don't accept new opens */
