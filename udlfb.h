@@ -50,7 +50,7 @@ struct dlfb_data {
 	int base16;
 	int base8;
 	u32 pseudo_palette[256];
-	int blank_mode; /* one of FB_BLANK_ */
+	int blank_mode; /*one of FB_BLANK_ */
 	/* blit-only rendering path metrics, exposed through sysfs */
 	atomic_t bytes_rendered; /* raw pixel-bytes driver asked to render */
 	atomic_t bytes_identical; /* saved effort with backbuffer comparison */
@@ -65,9 +65,6 @@ struct dlfb_data {
 #define BULK_SIZE 512
 #define MAX_TRANSFER (PAGE_SIZE*16 - BULK_SIZE)
 #define WRITES_IN_FLIGHT (4)
-
-#define MIN_EDID_SIZE 128
-#define MAX_EDID_SIZE 128
 
 #define MAX_VENDOR_DESCRIPTOR_SIZE 256
 
@@ -96,6 +93,11 @@ struct dlfb_data {
 #define DL_ALIGN_UP(x, a) ALIGN(x, a)
 #define DL_ALIGN_DOWN(x, a) ALIGN(x-(a-1), a)
 
+/* for full kernel builds, pulled from drivers/video/edid.h */
+#ifndef EDID_LENGTH
+#define EDID_LENGTH 128
+#endif
+
 /* remove once this gets added to sysfs.h */
 #define __ATTR_RW(attr) __ATTR(attr, 0644, attr##_show, attr##_store)
 
@@ -106,14 +108,19 @@ struct dlfb_data {
  * other will exist (one will outlive the other).  So we can't
  * call the dev_*() macros, because we don't have a stable dev object.
  */
-#define dl_err(format, arg...)		\
+
+#ifndef pr_err
+
+#define pr_err(format, arg...)		\
 	pr_err("udlfb: " format, ## arg)
-#define dl_warn(format, arg...) \
+#define pr_warn(format, arg...) \
 	pr_warning("udlfb: " format, ## arg)
-#define dl_notice(format, arg...) \
+#define pr_notice(format, arg...) \
 	pr_notice("udlfb: " format, ## arg)
-#define dl_info(format, arg...) \
+#define pr_info(format, arg...) \
 	pr_info("udlfb: " format, ## arg)
+
+#endif
 
 /* Let people on older kernels build udlfb as a module */
 #if LINUX_VERSION_CODE <= KERNEL_VERSION(2, 6, 33)
