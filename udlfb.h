@@ -110,19 +110,30 @@ struct dlfb_data {
  */
 
 #ifndef pr_err
-
 #define pr_err(format, arg...)		\
 	pr_err("udlfb: " format, ## arg)
+#endif
+
+#ifndef pr_warn
 #define pr_warn(format, arg...) \
 	pr_warning("udlfb: " format, ## arg)
+#endif
+
+#ifndef pr_notice
 #define pr_notice(format, arg...) \
 	pr_notice("udlfb: " format, ## arg)
+#endif
+
+#ifndef pr_info
 #define pr_info(format, arg...) \
 	pr_info("udlfb: " format, ## arg)
-
 #endif
 
 /* Let people on older kernels build udlfb as a module */
+#ifndef vzalloc
+#define vzalloc vmalloc
+#endif
+
 #if LINUX_VERSION_CODE <= KERNEL_VERSION(2, 6, 33)
 #define usb_alloc_coherent usb_buffer_alloc
 #define usb_free_coherent usb_buffer_free
