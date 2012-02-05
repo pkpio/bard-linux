@@ -9,7 +9,9 @@ clean:
 
 install:
 	$(MAKE) -C /lib/modules/`uname -r`/build SUBDIRS=$(PWD) modules_install
-	cp /lib/modules/`uname -r`/extra/udlfb.ko /lib/modules/`uname -r`/updates/udlfb.ko
+	if test -f /lib/modules/`uname -r`/extra/udlfb.ko; \
+	then cp /lib/modules/`uname -r`/extra/udlfb.ko /lib/modules/`uname -r`/updates/udlfb.ko ;\
+	fi
 
 else
      obj-m := udlfb.o
