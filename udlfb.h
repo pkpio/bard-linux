@@ -41,6 +41,7 @@ struct dlfb_data {
 	char *backing_buffer;
 	int fb_count;
 	bool virtualized; /* true when physical usb device not present */
+	struct delayed_work init_framebuffer_work;
 	struct delayed_work free_framebuffer_work;
 	atomic_t usb_active; /* 0 = update virtual buffer, but no usb traffic */
 	atomic_t lost_pixels; /* 1 = a render op failed. Need screen refresh */
@@ -137,6 +138,10 @@ struct dlfb_data {
 #if LINUX_VERSION_CODE <= KERNEL_VERSION(2, 6, 33)
 #define usb_alloc_coherent usb_buffer_alloc
 #define usb_free_coherent usb_buffer_free
+#endif
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 3, 0)
+#define unlink_framebuffer(x)
 #endif
 
 #endif

@@ -1004,35 +1004,42 @@ static void dlfb_release_urb_work(struct work_struct *work)
 	up(&unode->dev->urbs.limit_sem);
 }
 
-static void dlfb_free_framebuffer_work(struct work_struct *work)
+static void dlfb_free_framebuffer(struct dlfb_data *dev)
 {
-	struct dlfb_data *dev = container_of(work, struct dlfb_data,
-					     free_framebuffer_work.work);
 	struct fb_info *info = dev->info;
-	int node = info->node;
 
-	unregister_framebuffer(info);
+	if (info) {
+		int node = info->node;
 
-	if (info->cmap.len != 0)
-		fb_dealloc_cmap(&info->cmap);
-	if (info->monspecs.modedb)
-		fb_destroy_modedb(info->monspecs.modedb);
-	if (info->screen_base)
-		vfree(info->screen_base);
+		unregister_framebuffer(info);
 
-	fb_destroy_modelist(&info->modelist);
+		if (info->cmap.len != 0)
+			fb_dealloc_cmap(&info->cmap);
+		if (info->monspecs.modedb)
+			fb_destroy_modedb(info->monspecs.modedb);
+		if (info->screen_base)
+			vfree(info->screen_base);
 
-	dev->info = 0;
+		fb_destroy_modelist(&info->modelist);
 
-	/* Assume info structure is freed after this point */
-	framebuffer_release(info);
+		dev->info = NULL;
 
-	pr_warn("fb_info for /dev/fb%d has been freed\n", node);
+		/* Assume info structure is freed after this point */
+		framebuffer_release(info);
+
+		pr_warn("fb_info for /dev/fb%d has been freed\n", node);
+	}
 
 	/* ref taken in probe() as part of registering framebfufer */
 	kref_put(&dev->kref, dlfb_free);
 }
 
+static void dlfb_free_framebuffer_work(struct work_struct *work)
+{
+	struct dlfb_data *dev = container_of(work, struct dlfb_data,
+					     free_framebuffer_work.work);
+	dlfb_free_framebuffer(dev);
+}
 /*
  * Assumes caller is holding info->lock mutex (for open and release at least)
  */
@@ -1653,59 +1660,17 @@ success:
 	kfree(buf);
 	return true;
 }
-static int dlfb_usb_probe(struct usb_interface *interface,
-			const struct usb_device_id *id)
+
+static void dlfb_init_framebuffer_work(struct work_struct *work)
 {
-	struct usb_device *usbdev;
-	struct dlfb_data *dev = 0;
-	struct fb_info *info = 0;
-	int retval = -ENOMEM;
+	struct dlfb_data *dev = container_of(work, struct dlfb_data,
+					     init_framebuffer_work.work);
+	struct fb_info *info;
+	int retval;
 	int i;
 
-	/* usb initialization */
-
-	usbdev = interface_to_usbdev(interface);
-
-	dev = kzalloc(sizeof(*dev), GFP_KERNEL);
-	if (dev == NULL) {
-		err("dlfb_usb_probe: failed alloc of dev struct\n");
-		goto error;
-	}
-
-	/* we need to wait for both usb and fbdev to spin down on disconnect */
-	kref_init(&dev->kref); /* matching kref_put in usb .disconnect fn */
-	kref_get(&dev->kref); /* matching kref_put in free_framebuffer_work */
-
-	dev->udev = usbdev;
-	dev->gdev = &usbdev->dev; /* our generic struct device * */
-	usb_set_intfdata(interface, dev);
-
-	pr_info("%s %s - serial #%s\n",
-		usbdev->manufacturer, usbdev->product, usbdev->serial);
-	pr_info("vid_%04x&pid_%04x&rev_%04x driver's dlfb_data struct at %p\n",
-		usbdev->descriptor.idVendor, usbdev->descriptor.idProduct,
-		usbdev->descriptor.bcdDevice, dev);
-	pr_info("console enable=%d\n", console);
-	pr_info("fb_defio enable=%d\n", fb_defio);
-	pr_info("shadow enable=%d\n", shadow);
-
-	dev->sku_pixel_limit = 2048 * 1152; /* default to maximum */
-
-	if (!dlfb_parse_vendor_descriptor(dev, interface)) {
-		pr_err("firmware not recognized. Assume incompatible device\n");
-		goto error;
-	}
-
-	if (!dlfb_alloc_urb_list(dev, WRITES_IN_FLIGHT, MAX_TRANSFER)) {
-		retval = -ENOMEM;
-		pr_err("dlfb_alloc_urb_list failed\n");
-		goto error;
-	}
-
-	/* We don't register a new USB class. Our client interface is fbdev */
-
 	/* allocates framebuffer driver structure, not framebuffer memory */
-	info = framebuffer_alloc(0, &interface->dev);
+	info = framebuffer_alloc(0, dev->gdev);
 	if (!info) {
 		retval = -ENOMEM;
 		pr_err("framebuffer_alloc failed\n");
@@ -1767,30 +1732,75 @@ static int dlfb_usb_probe(struct usb_interface *interface,
 			info->var.xres, info->var.yres,
 			((dev->backing_buffer) ?
 			info->fix.smem_len * 2 : info->fix.smem_len) >> 10);
-	return 0;
+	return;
 
 err_del_attrs:
 	for (i -= 1; i >= 0; i--)
 		device_remove_file(info->dev, &fb_device_attrs[i]);
+	device_remove_bin_file(info->dev, &edid_attr);
+
+error:
+	dlfb_free_framebuffer(dev);
+}
+
+static int dlfb_usb_probe(struct usb_interface *interface,
+			const struct usb_device_id *id)
+{
+	struct usb_device *usbdev;
+	struct dlfb_data *dev = 0;
+	int retval = -ENOMEM;
+
+	/* usb initialization */
+
+	usbdev = interface_to_usbdev(interface);
+
+	dev = kzalloc(sizeof(*dev), GFP_KERNEL);
+	if (dev == NULL) {
+		err("dlfb_usb_probe: failed alloc of dev struct\n");
+		goto error;
+	}
+
+	kref_init(&dev->kref); /* matching kref_put in usb .disconnect fn */
+
+	dev->udev = usbdev;
+	dev->gdev = &usbdev->dev; /* our generic struct device * */
+	usb_set_intfdata(interface, dev);
+
+	pr_info("%s %s - serial #%s\n",
+		usbdev->manufacturer, usbdev->product, usbdev->serial);
+	pr_info("vid_%04x&pid_%04x&rev_%04x driver's dlfb_data struct at %p\n",
+		usbdev->descriptor.idVendor, usbdev->descriptor.idProduct,
+		usbdev->descriptor.bcdDevice, dev);
+	pr_info("console enable=%d\n", console);
+	pr_info("fb_defio enable=%d\n", fb_defio);
+	pr_info("shadow enable=%d\n", shadow);
+
+	dev->sku_pixel_limit = 2048 * 1152; /* default to maximum */
+
+	if (!dlfb_parse_vendor_descriptor(dev, interface)) {
+		pr_err("firmware not recognized. Assume incompatible device\n");
+		goto error;
+	}
+
+	if (!dlfb_alloc_urb_list(dev, WRITES_IN_FLIGHT, MAX_TRANSFER)) {
+		retval = -ENOMEM;
+		pr_err("dlfb_alloc_urb_list failed\n");
+		goto error;
+	}
+
+	kref_get(&dev->kref); /* matching kref_put in free_framebuffer_work */
+
+	/* We don't register a new USB class. Our client interface is fbdev */
+
+	/* Workitem keep things fast & simple during USB enumeration */
+	INIT_DELAYED_WORK(&dev->init_framebuffer_work,
+			  dlfb_init_framebuffer_work);
+	schedule_delayed_work(&dev->init_framebuffer_work, 0);
+
+	return 0;
 
 error:
 	if (dev) {
-
-		if (info) {
-			if (info->cmap.len != 0)
-				fb_dealloc_cmap(&info->cmap);
-			if (info->monspecs.modedb)
-				fb_destroy_modedb(info->monspecs.modedb);
-			if (info->screen_base)
-				vfree(info->screen_base);
-
-			fb_destroy_modelist(&info->modelist);
-
-			framebuffer_release(info);
-		}
-
-		if (dev->backing_buffer)
-			vfree(dev->backing_buffer);
 
 		kref_put(&dev->kref, dlfb_free); /* ref for framebuffer */
 		kref_put(&dev->kref, dlfb_free); /* last ref from kref_init */
@@ -1823,6 +1833,7 @@ static void dlfb_usb_disconnect(struct usb_interface *interface)
 		device_remove_file(info->dev, &fb_device_attrs[i]);
 	device_remove_bin_file(info->dev, &edid_attr);
 
+	unlink_framebuffer(info);
 	usb_set_intfdata(interface, NULL);
 
 	/* if clients still have us open, will be freed on last close */
