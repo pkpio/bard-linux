@@ -88,15 +88,11 @@ static int shadow = 1; /* Optionally disable shadow framebuffer */
 #endif
 
 #ifndef CONFIG_FB_SYS_IMAGEBLIT
-#ifndef CONFIG_FB_SYS_IMAGEBLIT_MODULE
 #warning CONFIG_FB_SYS_IMAGEBLIT kernel support required for fb console
-#endif
 #endif
 
 #ifndef CONFIG_FB_SYS_FOPS
-#ifndef CONFIG_FB_SYS_FOPS_MODULE
 #warning FB_SYS_FOPS kernel support required for filesystem char dev access
-#endif
 #endif
 
 #ifndef CONFIG_FB_MODE_HELPERS
@@ -665,7 +661,7 @@ static ssize_t dlfb_ops_read(struct fb_info *info, char __user *buf,
 {
 	ssize_t result = -ENOSYS;
 
-#if defined CONFIG_FB_SYS_FOPS || defined CONFIG_FB_SYS_FOPS_MODULE
+#if defined CONFIG_FB_SYS_FOPS
 	result = fb_sys_read(info, buf, count, ppos);
 #endif
 
@@ -681,11 +677,13 @@ static ssize_t dlfb_ops_read(struct fb_info *info, char __user *buf,
 static ssize_t dlfb_ops_write(struct fb_info *info, const char __user *buf,
 			  size_t count, loff_t *ppos)
 {
-	ssize_t result;
+	ssize_t result = 0;
+
+#if defined CONFIG_FB_SYS_FOPS
+
 	struct dlfb_data *dev = info->par;
 	u32 offset = (u32) *ppos;
 
-#if defined CONFIG_FB_SYS_FOPS || defined CONFIG_FB_SYS_FOPS_MODULE
 
 	result = fb_sys_write(info, buf, count, ppos);
 
@@ -706,10 +704,9 @@ static ssize_t dlfb_ops_write(struct fb_info *info, const char __user *buf,
 static void dlfb_ops_copyarea(struct fb_info *info,
 				const struct fb_copyarea *area)
 {
+#if defined CONFIG_FB_SYS_COPYAREA
 
 	struct dlfb_data *dev = info->par;
-
-#if defined CONFIG_FB_SYS_COPYAREA || defined CONFIG_FB_SYS_COPYAREA_MODULE
 
 	sys_copyarea(info, area);
 
@@ -722,9 +719,9 @@ static void dlfb_ops_copyarea(struct fb_info *info,
 static void dlfb_ops_imageblit(struct fb_info *info,
 				const struct fb_image *image)
 {
-	struct dlfb_data *dev = info->par;
+#if defined CONFIG_FB_SYS_IMAGEBLIT
 
-#if defined CONFIG_FB_SYS_IMAGEBLIT || defined CONFIG_FB_SYS_IMAGEBLIT_MODULE
+	struct dlfb_data *dev = info->par;
 
 	sys_imageblit(info, image);
 
@@ -738,9 +735,9 @@ static void dlfb_ops_imageblit(struct fb_info *info,
 static void dlfb_ops_fillrect(struct fb_info *info,
 			  const struct fb_fillrect *rect)
 {
-	struct dlfb_data *dev = info->par;
+#if defined CONFIG_FB_SYS_FILLRECT
 
-#if defined CONFIG_FB_SYS_FILLRECT || defined CONFIG_FB_SYS_FILLRECT_MODULE
+	struct dlfb_data *dev = info->par;
 
 	sys_fillrect(info, rect);
 
