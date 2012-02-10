@@ -1713,15 +1713,13 @@ static void dlfb_init_framebuffer_work(struct work_struct *work)
 	for (i = 0; i < ARRAY_SIZE(fb_device_attrs); i++) {
 		retval = device_create_file(info->dev, &fb_device_attrs[i]);
 		if (retval) {
-			pr_err("device_create_file failed %d\n", retval);
-			goto err_del_attrs;
+			pr_warn("device_create_file failed %d\n", retval);
 		}
 	}
 
 	retval = device_create_bin_file(info->dev, &edid_attr);
 	if (retval) {
-		pr_err("device_create_bin_file failed %d\n", retval);
-		goto err_del_attrs;
+		pr_warn("device_create_bin_file failed %d\n", retval);
 	}
 
 	pr_info("DisplayLink USB device /dev/fb%d attached. %dx%d resolution."
@@ -1730,11 +1728,6 @@ static void dlfb_init_framebuffer_work(struct work_struct *work)
 			((dev->backing_buffer) ?
 			info->fix.smem_len * 2 : info->fix.smem_len) >> 10);
 	return;
-
-err_del_attrs:
-	for (i -= 1; i >= 0; i--)
-		device_remove_file(info->dev, &fb_device_attrs[i]);
-	device_remove_bin_file(info->dev, &edid_attr);
 
 error:
 	dlfb_free_framebuffer(dev);
