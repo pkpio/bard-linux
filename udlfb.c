@@ -1825,12 +1825,16 @@ static void dlfb_usb_disconnect(struct usb_interface *interface)
 	/* When non-active we'll update virtual framebuffer, but no new urbs */
 	atomic_set(&dev->usb_active, 0);
 
-	/* remove udlfb's sysfs interfaces */
-	for (i = 0; i < ARRAY_SIZE(fb_device_attrs); i++)
-		device_remove_file(info->dev, &fb_device_attrs[i]);
-	device_remove_bin_file(info->dev, &edid_attr);
+	if (info) {
 
-	unlink_framebuffer(info);
+		/* remove udlfb's sysfs interfaces */
+		for (i = 0; i < ARRAY_SIZE(fb_device_attrs); i++)
+			device_remove_file(info->dev, &fb_device_attrs[i]);
+		device_remove_bin_file(info->dev, &edid_attr);
+
+		unlink_framebuffer(info);
+	}
+
 	usb_set_intfdata(interface, NULL);
 
 	/* if clients still have us open, will be freed on last close */
