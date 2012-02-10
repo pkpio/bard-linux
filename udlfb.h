@@ -140,8 +140,4 @@ struct dlfb_data {
 #define usb_free_coherent usb_buffer_free
 #endif
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 3, 0)
-#define unlink_framebuffer(x)
-#endif
-
 #endif

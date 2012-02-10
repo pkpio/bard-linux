@@ -1825,6 +1825,8 @@ static void dlfb_usb_disconnect(struct usb_interface *interface)
 			device_remove_file(info->dev, &fb_device_attrs[i]);
 		device_remove_bin_file(info->dev, &edid_attr);
 
+		/* it's safe to uncomment next line if your kernel
+		   doesn't yet have this function exported */
 		unlink_framebuffer(info);
 	}
 
