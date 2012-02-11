@@ -979,10 +979,6 @@ static void dlfb_free(struct kref *kref)
 {
 	struct dlfb_data *dev = container_of(kref, struct dlfb_data, kref);
 
-	/* this function will wait for all in-flight urbs to complete */
-	if (dev->urbs.count > 0)
-		dlfb_free_urb_list(dev);
-
 	if (dev->backing_buffer)
 		vfree(dev->backing_buffer);
 
@@ -1818,6 +1814,9 @@ static void dlfb_usb_disconnect(struct usb_interface *interface)
 	/* When non-active we'll update virtual framebuffer, but no new urbs */
 	atomic_set(&dev->usb_active, 0);
 
+	/* this function will wait for all in-flight urbs to complete */
+	dlfb_free_urb_list(dev);
+
 	if (info) {
 
 		/* remove udlfb's sysfs interfaces */
@@ -1831,6 +1830,8 @@ static void dlfb_usb_disconnect(struct usb_interface *interface)
 	}
 
 	usb_set_intfdata(interface, NULL);
+	dev->udev = NULL;
+	dev->gdev = NULL;
 
 	/* if clients still have us open, will be freed on last close */
 	if (dev->fb_count == 0)
@@ -1913,12 +1914,12 @@ static void dlfb_free_urb_list(struct dlfb_data *dev)
 	int ret;
 	unsigned long flags;
 
-	pr_notice("Waiting for completes and freeing all render urbs\n");
+	pr_notice("Freeing all render urbs\n");
 
 	/* keep waiting and freeing, until we've got 'em all */
 	while (count--) {
 
-		/* Getting interrupted means a leak, but ok at shutdown*/
+		/* Getting interrupted means a leak, but ok at disconnect */
 		ret = down_interruptible(&dev->urbs.limit_sem);
 		if (ret)
 			break;
@@ -1940,6 +1941,7 @@ static void dlfb_free_urb_list(struct dlfb_data *dev)
 		kfree(node);
 	}
 
+	dev->urbs.count = 0;
 }
 
 static int dlfb_alloc_urb_list(struct dlfb_data *dev, int count, size_t size)
