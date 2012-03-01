@@ -71,9 +71,9 @@ static struct usb_device_id id_table[] = {
 MODULE_DEVICE_TABLE(usb, id_table);
 
 /* module options */
-static int console = 1; /* Allow fbcon to open framebuffer */
-static int fb_defio = 1;  /* Detect mmap writes using page faults */
-static int shadow = 1; /* Optionally disable shadow framebuffer */
+static bool console = 1; /* Allow fbcon to open framebuffer */
+static bool fb_defio = 1;  /* Detect mmap writes using page faults */
+static bool shadow = 1; /* Optionally disable shadow framebuffer */
 
 /*
  * When building as a separate module against an arbitrary kernel,
@@ -677,7 +677,7 @@ static ssize_t dlfb_ops_read(struct fb_info *info, char __user *buf,
 static ssize_t dlfb_ops_write(struct fb_info *info, const char __user *buf,
 			  size_t count, loff_t *ppos)
 {
-	ssize_t result = 0;
+	ssize_t result;
 
 #if defined CONFIG_FB_SYS_FOPS
 
