@@ -677,13 +677,12 @@ static ssize_t dlfb_ops_read(struct fb_info *info, char __user *buf,
 static ssize_t dlfb_ops_write(struct fb_info *info, const char __user *buf,
 			  size_t count, loff_t *ppos)
 {
-	ssize_t result;
+	ssize_t result = -ENOSYS;
 
 #if defined CONFIG_FB_SYS_FOPS
 
 	struct dlfb_data *dev = info->par;
 	u32 offset = (u32) *ppos;
-
 
 	result = fb_sys_write(info, buf, count, ppos);
 
@@ -695,8 +694,8 @@ static ssize_t dlfb_ops_write(struct fb_info *info, const char __user *buf,
 		dlfb_handle_damage(dev, 0, start, info->var.xres,
 			lines, info->screen_base);
 	}
-#endif
 
+#endif
 	return result;
 }
 
@@ -1385,6 +1384,7 @@ static int dlfb_setup_modes(struct dlfb_data *dev,
 						     &info->modelist);
 	}
 
+#ifdef CONFIG_FB_MODE_HELPERS
 	/* If everything else has failed, fall back to safe default mode */
 	if (default_vmode == NULL) {
 
@@ -1413,7 +1413,7 @@ static int dlfb_setup_modes(struct dlfb_data *dev,
 		default_vmode = fb_find_nearest_mode(&fb_vmode,
 						     &info->modelist);
 	}
-
+#endif
 	/* If we have good mode and no active clients*/
 	if ((default_vmode != NULL) && (dev->fb_count == 0)) {
 
@@ -1824,9 +1824,9 @@ static void dlfb_usb_disconnect(struct usb_interface *interface)
 			device_remove_file(info->dev, &fb_device_attrs[i]);
 		device_remove_bin_file(info->dev, &edid_attr);
 
-		/* it's safe to uncomment next line if your kernel
-		   doesn't yet have this function exported */
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 3, 0))
 		unlink_framebuffer(info);
+#endif
 	}
 
 	usb_set_intfdata(interface, NULL);
