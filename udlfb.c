@@ -74,6 +74,7 @@ MODULE_DEVICE_TABLE(usb, id_table);
 static bool console = 1; /* Allow fbcon to open framebuffer */
 static bool fb_defio = 1;  /* Detect mmap writes using page faults */
 static bool shadow = 1; /* Optionally disable shadow framebuffer */
+static int pixel_limit; /* Optionally force a pixel resolution limit */
 
 /*
  * When building as a separate module against an arbitrary kernel,
@@ -1077,7 +1078,8 @@ static int dlfb_is_valid_mode(struct fb_videomode *mode,
 		return 0;
 	}
 
-	pr_info("%dx%d valid mode\n", mode->xres, mode->yres);
+	pr_info("%dx%d @ %d Hz valid mode\n", mode->xres, mode->yres,
+		mode->refresh);
 
 	return 1;
 }
@@ -1474,6 +1476,14 @@ static ssize_t metrics_cpu_kcycles_used_show(struct device *fbdev,
 			atomic_read(&dev->cpu_kcycles_used));
 }
 
+static ssize_t monitor_show(struct device *fbdev,
+				   struct device_attribute *a, char *buf) {
+	struct fb_info *fb_info = dev_get_drvdata(fbdev);
+	return snprintf(buf, PAGE_SIZE, "%s-%s\n",
+			fb_info->monspecs.monitor,
+			fb_info->monspecs.serial_no);
+}
+
 static ssize_t edid_show(
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 35)
 			struct file *filp,
@@ -1553,6 +1563,7 @@ static struct device_attribute fb_device_attrs[] = {
 	__ATTR_RO(metrics_bytes_identical),
 	__ATTR_RO(metrics_bytes_sent),
 	__ATTR_RO(metrics_cpu_kcycles_used),
+	__ATTR_RO(monitor),
 	__ATTR(metrics_reset, S_IWUSR, NULL, metrics_reset_store),
 };
 
@@ -1620,7 +1631,7 @@ static int dlfb_parse_vendor_descriptor(struct dlfb_data *dev,
 			u8 length;
 			u16 key;
 
-			key = *((u16 *) desc);
+			key = le16_to_cpu(*((u16 *) desc));
 			desc += sizeof(u16);
 			length = *desc;
 			desc++;
@@ -1652,6 +1663,84 @@ unrecognized:
 success:
 	kfree(buf);
 	return true;
+}
+
+static void dlfb_init_framebuffer_work(struct work_struct *work);
+
+static int dlfb_usb_probe(struct usb_interface *interface,
+			const struct usb_device_id *id)
+{
+	struct usb_device *usbdev;
+	struct dlfb_data *dev = 0;
+	int retval = -ENOMEM;
+
+	/* usb initialization */
+
+	usbdev = interface_to_usbdev(interface);
+
+	dev = kzalloc(sizeof(*dev), GFP_KERNEL);
+	if (dev == NULL) {
+		err("dlfb_usb_probe: failed alloc of dev struct\n");
+		goto error;
+	}
+
+	kref_init(&dev->kref); /* matching kref_put in usb .disconnect fn */
+
+	dev->udev = usbdev;
+	dev->gdev = &usbdev->dev; /* our generic struct device * */
+	usb_set_intfdata(interface, dev);
+
+	pr_info("%s %s - serial #%s\n",
+		usbdev->manufacturer, usbdev->product, usbdev->serial);
+	pr_info("vid_%04x&pid_%04x&rev_%04x driver's dlfb_data struct at %p\n",
+		usbdev->descriptor.idVendor, usbdev->descriptor.idProduct,
+		usbdev->descriptor.bcdDevice, dev);
+	pr_info("console enable=%d\n", console);
+	pr_info("fb_defio enable=%d\n", fb_defio);
+	pr_info("shadow enable=%d\n", shadow);
+
+	dev->sku_pixel_limit = 2048 * 1152; /* default to maximum */
+
+	if (!dlfb_parse_vendor_descriptor(dev, interface)) {
+		pr_err("firmware not recognized. Assume incompatible device\n");
+		goto error;
+	}
+
+	if (pixel_limit) {
+		pr_warn("DL chip limit of %d overriden"
+			" by module param to %d\n",
+			dev->sku_pixel_limit, pixel_limit);
+		dev->sku_pixel_limit = pixel_limit;
+	}
+
+
+	if (!dlfb_alloc_urb_list(dev, WRITES_IN_FLIGHT, MAX_TRANSFER)) {
+		retval = -ENOMEM;
+		pr_err("dlfb_alloc_urb_list failed\n");
+		goto error;
+	}
+
+	kref_get(&dev->kref); /* matching kref_put in free_framebuffer_work */
+
+	/* We don't register a new USB class. Our client interface is fbdev */
+
+	/* Workitem keep things fast & simple during USB enumeration */
+	INIT_DELAYED_WORK(&dev->init_framebuffer_work,
+			  dlfb_init_framebuffer_work);
+	schedule_delayed_work(&dev->init_framebuffer_work, 0);
+
+	return 0;
+
+error:
+	if (dev) {
+
+		kref_put(&dev->kref, dlfb_free); /* ref for framebuffer */
+		kref_put(&dev->kref, dlfb_free); /* last ref from kref_init */
+
+		/* dev has been deallocated. Do not dereference */
+	}
+
+	return retval;
 }
 
 static void dlfb_init_framebuffer_work(struct work_struct *work)
@@ -1727,74 +1816,6 @@ static void dlfb_init_framebuffer_work(struct work_struct *work)
 
 error:
 	dlfb_free_framebuffer(dev);
-}
-
-static int dlfb_usb_probe(struct usb_interface *interface,
-			const struct usb_device_id *id)
-{
-	struct usb_device *usbdev;
-	struct dlfb_data *dev = 0;
-	int retval = -ENOMEM;
-
-	/* usb initialization */
-
-	usbdev = interface_to_usbdev(interface);
-
-	dev = kzalloc(sizeof(*dev), GFP_KERNEL);
-	if (dev == NULL) {
-		err("dlfb_usb_probe: failed alloc of dev struct\n");
-		goto error;
-	}
-
-	kref_init(&dev->kref); /* matching kref_put in usb .disconnect fn */
-
-	dev->udev = usbdev;
-	dev->gdev = &usbdev->dev; /* our generic struct device * */
-	usb_set_intfdata(interface, dev);
-
-	pr_info("%s %s - serial #%s\n",
-		usbdev->manufacturer, usbdev->product, usbdev->serial);
-	pr_info("vid_%04x&pid_%04x&rev_%04x driver's dlfb_data struct at %p\n",
-		usbdev->descriptor.idVendor, usbdev->descriptor.idProduct,
-		usbdev->descriptor.bcdDevice, dev);
-	pr_info("console enable=%d\n", console);
-	pr_info("fb_defio enable=%d\n", fb_defio);
-	pr_info("shadow enable=%d\n", shadow);
-
-	dev->sku_pixel_limit = 2048 * 1152; /* default to maximum */
-
-	if (!dlfb_parse_vendor_descriptor(dev, interface)) {
-		pr_err("firmware not recognized. Assume incompatible device\n");
-		goto error;
-	}
-
-	if (!dlfb_alloc_urb_list(dev, WRITES_IN_FLIGHT, MAX_TRANSFER)) {
-		retval = -ENOMEM;
-		pr_err("dlfb_alloc_urb_list failed\n");
-		goto error;
-	}
-
-	kref_get(&dev->kref); /* matching kref_put in free_framebuffer_work */
-
-	/* We don't register a new USB class. Our client interface is fbdev */
-
-	/* Workitem keep things fast & simple during USB enumeration */
-	INIT_DELAYED_WORK(&dev->init_framebuffer_work,
-			  dlfb_init_framebuffer_work);
-	schedule_delayed_work(&dev->init_framebuffer_work, 0);
-
-	return 0;
-
-error:
-	if (dev) {
-
-		kref_put(&dev->kref, dlfb_free); /* ref for framebuffer */
-		kref_put(&dev->kref, dlfb_free); /* last ref from kref_init */
-
-		/* dev has been deallocated. Do not dereference */
-	}
-
-	return retval;
 }
 
 static void dlfb_usb_disconnect(struct usb_interface *interface)
@@ -2056,6 +2077,9 @@ MODULE_PARM_DESC(fb_defio, "Page fault detection of mmap writes");
 
 module_param(shadow, bool, S_IWUSR | S_IRUSR | S_IWGRP | S_IRGRP);
 MODULE_PARM_DESC(shadow, "Shadow vid mem. Disable to save mem but lose perf");
+
+module_param(pixel_limit, int, S_IWUSR | S_IRUSR | S_IWGRP | S_IRGRP);
+MODULE_PARM_DESC(pixel_limit, "Force limit on max mode (in x*y pixels)");
 
 MODULE_AUTHOR("Roberto De Ioris <roberto@unbit.it>, "
 	      "Jaya Kumar <jayakumar.lkml@gmail.com>, "
