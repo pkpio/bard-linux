@@ -44,7 +44,7 @@ static int __init testusb_init(void){
      printk("\ntestusb: driver registered successfully\n");
   }
 
-  printk("\nResult is: " + result);
+  printk("\nResult : %d\n", result);
 
   return result;
 }
