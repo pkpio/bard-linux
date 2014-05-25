@@ -28,7 +28,7 @@
 #include <string.h>
 #include <unistd.h>
 
-#define IN 0x85
+#define IN 0x81
 #define OUT 0x07
 
 #define VID 0x18d1
