@@ -1,22 +1,34 @@
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/usb.h>
+#include <linux/slab.h>
 
 /* Define these values to match your devices */
 #define USB_VENDOR_ID 0x04e8
 #define USB_PRODUCT_ID 0x6860
 
+/* Structure to hold all of our device specific stuff */
+struct usb_skel {
+	struct usb_device *	udev;			/* the usb device for this device */
+	struct usb_interface *	interface;		/* the interface for this device */
+	unsigned char *		bulk_in_buffer;		/* the buffer to receive data */
+	size_t			bulk_in_size;		/* the size of the receive buffer */
+	__u8			bulk_in_endpointAddr;	/* the address of the bulk in endpoint */
+	__u8			bulk_out_endpointAddr;	/* the address of the bulk out endpoint */
+	struct kref		kref;
+};
 
 static int testusb_probe (struct usb_interface *interface, const struct usb_device_id *id){
 	struct usb_host_interface *iface_desc;
 	struct usb_endpoint_descriptor *endpoint;
-	struct usb_device *dev;
+	struct usb_skel *dev;
+	int buffer_size;
 	int i;
 
 	printk("\ntestusb: probe module\n");
 
 	iface_desc = interface->cur_altsetting;
-	dev = interface_to_usbdev(interface);
+	dev = usb_get_intfdata(interface);
 
 	for (i = 0; i < iface_desc->desc.bNumEndpoints; ++i) {
 		endpoint = &iface_desc->endpoint[i].desc;
@@ -30,8 +42,8 @@ static int testusb_probe (struct usb_interface *interface, const struct usb_devi
 			dev->bulk_in_endpointAddr = endpoint->bEndpointAddress;
 			dev->bulk_in_buffer = kmalloc(buffer_size, GFP_KERNEL);
 			if (!dev->bulk_in_buffer) {
-				err("Could not allocate bulk_in_buffer");
-				goto error;
+				printk("\nCould not allocate bulk_in_buffer\n");
+				//goto error;
 			}
 		}
 
@@ -45,8 +57,8 @@ static int testusb_probe (struct usb_interface *interface, const struct usb_devi
 	}
 
 	if (!(dev->bulk_in_endpointAddr && dev->bulk_out_endpointAddr)) {
-		err("Could not find both bulk-in and bulk-out endpoints");
-		goto error;
+		printk("\nCould not find both bulk-in and bulk-out endpoints\n");
+		//goto error;
 	}
 
 	return 0;
