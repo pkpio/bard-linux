@@ -52,6 +52,8 @@ static int testusb_probe (struct usb_interface *interface, const struct usb_devi
 			if (!dev->bulk_in_buffer) {
 				printk("\nCould not allocate bulk_in_buffer\n");
 				//goto error;
+			} else{
+				printk("\nADK-probe: Found a bulk in interface of size: %d\n", buffer_size);
 			}
 		}
 
@@ -61,6 +63,7 @@ static int testusb_probe (struct usb_interface *interface, const struct usb_devi
 			== USB_ENDPOINT_XFER_BULK)) {
 		/* we found a bulk out endpoint */
 			dev->bulk_out_endpointAddr = endpoint->bEndpointAddress;
+			printk("\nADK-probe: Found a bulk in interface of address %x\n", dev->bulk_out_endpointAddr);
 		}
 	}
 
