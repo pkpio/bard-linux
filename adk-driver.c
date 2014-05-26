@@ -44,7 +44,7 @@ static int testusb_probe (struct usb_interface *interface, const struct usb_devi
 
 		/* for INTERRUPT endpoint */
 		if((endpoint->bmAttributes & USB_ENDPOINT_XFERTYPE_MASK)== USB_ENDPOINT_XFER_INT)
-			printk("\nADK-probe: Found a interrupt endpoint\n");
+			printk("\nADK-probe: Found an interrupt endpoint\n");
 			
 		/* for CONTROL endpoint */
 		if((endpoint->bmAttributes & USB_ENDPOINT_XFERTYPE_MASK)== USB_ENDPOINT_XFER_CONTROL)
