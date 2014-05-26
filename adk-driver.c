@@ -38,9 +38,19 @@ static int testusb_probe (struct usb_interface *interface, const struct usb_devi
 	dev->interface = interface;
 
 	iface_desc = interface->cur_altsetting;
+	printk("\nADK-probe: Number endpoints found: %d\n", iface_desc->desc.bNumEndpoints);
 	for (i = 0; i < iface_desc->desc.bNumEndpoints; ++i) {
 		endpoint = &iface_desc->endpoint[i].desc;
 
+		/* for INTERRUPT endpoint */
+		if((endpoint->bmAttributes & USB_ENDPOINT_XFERTYPE_MASK)== USB_ENDPOINT_XFER_INT)
+			printk("\nADK-probe: Found a interrupt endpoint\n");
+			
+		/* for CONTROL endpoint */
+		if((endpoint->bmAttributes & USB_ENDPOINT_XFERTYPE_MASK)== USB_ENDPOINT_XFER_CONTROL)
+			printk("\nADK-probe: Found a control endpoint\n");
+		
+		/* for BULK IN endpoint */
 		if (!dev->bulk_in_endpointAddr &&
 		(endpoint->bEndpointAddress & USB_DIR_IN) &&
 		((endpoint->bmAttributes & USB_ENDPOINT_XFERTYPE_MASK)== USB_ENDPOINT_XFER_BULK)) {
@@ -57,6 +67,7 @@ static int testusb_probe (struct usb_interface *interface, const struct usb_devi
 			}
 		}
 
+		/* for BULK OUT endpoint */
 		if (!dev->bulk_out_endpointAddr &&
 		!(endpoint->bEndpointAddress & USB_DIR_IN) &&
 		((endpoint->bmAttributes & USB_ENDPOINT_XFERTYPE_MASK)
