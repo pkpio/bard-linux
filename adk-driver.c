@@ -28,14 +28,14 @@ static int testusb_probe (struct usb_interface *interface, const struct usb_devi
 	printk("\ntestusb: probe module\n");
 
 	dev = kmalloc(sizeof(*dev), GFP_KERNEL);
+	if(dev == NULL)
+		return -1;
+		
 	memset(dev, 0x00, sizeof(*dev));
 	kref_init(&dev->kref);
 
 	dev->udev = usb_get_dev(interface_to_usbdev(interface));
 	dev->interface = interface;
-	
-	if(dev == NULL)
-		return -1;
 
 	iface_desc = interface->cur_altsetting;
 	for (i = 0; i < iface_desc->desc.bNumEndpoints; ++i) {
