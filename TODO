@@ -1,0 +1,9 @@
+Issues:
+
+- Probe function hangs-up at control command transfer. On pulling out the device, code finally exits with error code -71
+
+
+Goals:
+
+- Fix issue listed above
+- Complete the adk mode setup function
