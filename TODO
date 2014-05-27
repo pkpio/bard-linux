@@ -1,6 +1,6 @@
 Issues:
 
-- Probe function hangs-up at control command transfer. On pulling out the device, code finally exits with error code -71
+- usb_control_msg returns error code -110
 
 
 Goals:
