@@ -17,6 +17,14 @@ struct usb_skel {
 	__u8			bulk_out_endpointAddr;	/* the address of the bulk out endpoint */
 	struct kref		kref;
 };
+static int setup_accessory(
+	const struct usb_skel *dev,
+	const char *manufacturer,
+	const char *modelName,
+	const char *description,
+	const char *version,
+	const char *uri,
+	const char *serialNumber);
 
 static int testusb_probe (struct usb_interface *interface, const struct usb_device_id *id){
 	struct usb_host_interface *iface_desc;
@@ -24,6 +32,7 @@ static int testusb_probe (struct usb_interface *interface, const struct usb_devi
 	struct usb_skel *dev;
 	int buffer_size;
 	int i;
+	unsigned char ioBuffer[2];
 
 	printk("\ntestusb: probe module\n");
 
@@ -83,9 +92,64 @@ static int testusb_probe (struct usb_interface *interface, const struct usb_devi
 		//goto error;
 	}
 
+	/* setup into accessory */
+	/*i = setup_accessory(
+		dev,
+		"Nexus-Computing GmbH",
+		"Model",
+		"Description",
+		"VersionName",
+		"http://neuxs-computing.ch",
+		"SerialNo.");
+	*/
+	i = usb_control_msg(
+		dev->udev, //usb_device pointer
+		usb_sndctrlpipe(dev->udev, 0), //pipe
+		51, //request
+		0xC0, //requesttype
+		0x00, //value
+		0x00, //index
+		ioBuffer, //data
+		2, //length
+		0 //timeout
+		);
+	printk("\nADK-probe: accessory retup response: %d\n", i);
+
 	return 0;
 }
 
+static int setup_accessory(
+	const struct usb_skel *dev,
+	const char *manufacturer,
+	const char *modelName,
+	const char *description,
+	const char *version,
+	const char *uri,
+	const char *serialNumber) {
+
+	unsigned char ioBuffer[2];
+	int devVersion;
+	int response;
+	int tries = 15;
+
+	printk("\nAccessory-Setup: accessory setup started\n");
+	/* send control message */
+	response = usb_control_msg(
+		dev->udev, //usb_device pointer
+		usb_sndctrlpipe(dev->udev, 0), //pipe
+		51, //request
+		0xC0, //requesttype
+		0x00, //value
+		0x00, //index
+		ioBuffer, //data
+		2, //length
+		0 //timeout
+		);
+	printk("\nAccessory-Setup: accessory retup response: %d\n", response);
+
+	return response;
+
+}
 
 static void testusb_disconnect (struct usb_interface *interface){
 	printk("\ntestusb: disconnect module\n");
