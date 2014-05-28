@@ -32,6 +32,7 @@ static int testusb_probe (struct usb_interface *interface, const struct usb_devi
 	struct usb_skel *dev;
 	int buffer_size;
 	int i;
+	unsigned int test;
 	unsigned char ioBuffer[2];
 
 	printk("\ntestusb: probe module\n");
@@ -83,7 +84,7 @@ static int testusb_probe (struct usb_interface *interface, const struct usb_devi
 			== USB_ENDPOINT_XFER_BULK)) {
 		/* we found a bulk out endpoint */
 			dev->bulk_out_endpointAddr = endpoint->bEndpointAddress;
-			printk("\nADK-probe: Found a bulk in interface of address %x\n", dev->bulk_out_endpointAddr);
+			printk("\nADK-probe: Found a bulk out interface of address %x\n", dev->bulk_out_endpointAddr);
 		}
 	}
 
@@ -102,16 +103,31 @@ static int testusb_probe (struct usb_interface *interface, const struct usb_devi
 		"http://neuxs-computing.ch",
 		"SerialNo.");
 	*/
+	test = usb_rcvbulkpipe(dev->udev, 0);
+	printk("\nADK-probe: bulkin number:%u\n", test);
+	
+	test = usb_sndbulkpipe(dev->udev, 0);
+	printk("\nADK-probe: bulkout number:%u\n", test);
+	
+	test = usb_sndctrlpipe(dev->udev, 0);
+	printk("\nADK-probe: ctrlpipe number:%u\n", test);
+	
+	test = usb_sndctrlpipe(dev->udev, 1);
+	printk("\nADK-probe: ctrlpipe number:%u\n", test);
+	
+	test = usb_sndctrlpipe(dev->udev, 2);
+	printk("\nADK-probe: ctrlpipe number:%u\n", test);
+	
 	i = usb_control_msg(
 		dev->udev, //usb_device pointer
 		usb_sndctrlpipe(dev->udev, 0), //pipe
 		51, //request
-		0xC0, //requesttype
+		0xc0, //requesttype
 		0x00, //value
 		0x00, //index
 		ioBuffer, //data
 		2, //length
-		0 //timeout
+		10 //timeout
 		);
 	printk("\nADK-probe: accessory retup response: %d\n", i);
 
