@@ -1,0 +1,9 @@
+Issues:
+
+- usb_control_msg returns error code -110
+
+
+Goals:
+
+- Fix issue listed above
+- Complete the adk mode setup function
