@@ -2,6 +2,7 @@
 #include <linux/module.h>
 #include <linux/usb.h>
 #include <linux/slab.h>
+#include <linux/errno.h>
 
 /* Define these values to match your devices */
 #define USB_VENDOR_ID 0x04e8
@@ -17,6 +18,7 @@ struct usb_skel {
 	__u8			bulk_out_endpointAddr;	/* the address of the bulk out endpoint */
 	struct kref		kref;
 };
+
 static int setup_accessory(
 	const struct usb_skel *dev,
 	const char *manufacturer,
@@ -44,7 +46,7 @@ static int testusb_probe (struct usb_interface *interface, const struct usb_devi
 	memset(dev, 0x00, sizeof(*dev));
 	kref_init(&dev->kref);
 
-	dev->udev = usb_get_dev(interface_to_usbdev(interface));
+	dev->udev = interface_to_usbdev(interface);
 	dev->interface = interface;
 
 	iface_desc = interface->cur_altsetting;
@@ -103,33 +105,19 @@ static int testusb_probe (struct usb_interface *interface, const struct usb_devi
 		"http://neuxs-computing.ch",
 		"SerialNo.");
 	*/
-	test = usb_rcvbulkpipe(dev->udev, 0);
-	printk("\nADK-probe: bulkin number:%u\n", test);
-	
-	test = usb_sndbulkpipe(dev->udev, 0);
-	printk("\nADK-probe: bulkout number:%u\n", test);
-	
-	test = usb_sndctrlpipe(dev->udev, 0);
-	printk("\nADK-probe: ctrlpipe number:%u\n", test);
-	
-	test = usb_sndctrlpipe(dev->udev, 1);
-	printk("\nADK-probe: ctrlpipe number:%u\n", test);
-	
-	test = usb_sndctrlpipe(dev->udev, 2);
-	printk("\nADK-probe: ctrlpipe number:%u\n", test);
 	
 	i = usb_control_msg(
 		dev->udev, //usb_device pointer
-		usb_sndctrlpipe(dev->udev, 0), //pipe
+		usb_rcvctrlpipe(dev->udev, 0), //pipe
 		51, //request
 		0xc0, //requesttype
 		0x00, //value
 		0x00, //index
 		ioBuffer, //data
 		2, //length
-		10 //timeout
+		100 //timeout
 		);
-	printk("\nADK-probe: accessory retup response: %d\n", i);
+	printk("\nADK-probe: accessory setup response: %d\n", i);
 
 	return 0;
 }
@@ -152,14 +140,14 @@ static int setup_accessory(
 	/* send control message */
 	response = usb_control_msg(
 		dev->udev, //usb_device pointer
-		usb_sndctrlpipe(dev->udev, 0), //pipe
+		usb_rcvctrlpipe(dev->udev, 0), //pipe
 		51, //request
-		0xC0, //requesttype
+		0xc0, //requesttype
 		0x00, //value
 		0x00, //index
 		ioBuffer, //data
 		2, //length
-		0 //timeout
+		100 //timeout
 		);
 	printk("\nAccessory-Setup: accessory retup response: %d\n", response);
 
