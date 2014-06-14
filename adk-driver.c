@@ -121,25 +121,61 @@ static int setup_accessory(
 
 	unsigned char ioBuffer[2];
 	int devVersion;
-	int response;
+	int retval;
 	int tries = 15;
 
 	printk("\nAccessory-Setup: accessory setup started\n");
-	/* send control message */
-	response = usb_control_msg(
-		dev->udev, //usb_device pointer
-		usb_rcvctrlpipe(dev->udev, 0), //pipe
-		51, //request
-		0xc0, //requesttype
-		0x00, //value
-		0x00, //index
-		ioBuffer, //data
-		2, //length
-		100 //timeout
-		);
-	printk("\nAccessory-Setup: accessory retup response: %d\n", response);
-
-	return response;
+	
+	/* send accessory setup sequence */
+	retval = usb_control_msg(dev->udev, usb_rcvctrlpipe(dev->udev, 0),
+		51, 0xc0, 0x00, 0x00, ioBuffer, 2, HZ*5);
+	if (retval < 0) 
+		goto exit;
+		
+	retval = usb_control_msg(dev->udev, usb_rcvctrlpipe(dev->udev, 0),
+		52, 0x40, 0, 0, (char*)manufacturer, strlen(manufacturer), HZ*5);
+	if (retval < 0)
+		goto exit;
+		
+	retval = usb_control_msg(dev->udev, usb_rcvctrlpipe(dev->udev, 0),
+		52, 0x40, 0, 1, (char*)modelName, strlen(modelName)+1, HZ*5);
+	if (retval < 0)
+		goto exit;
+		
+	retval = usb_control_msg(dev->udev, usb_rcvctrlpipe(dev->udev, 0),
+		52, 0x40, 0, 2, (char*)description, strlen(description)+1, HZ*5);
+	if (retval < 0)
+		goto exit;
+		
+	retval = usb_control_msg(dev->udev, usb_rcvctrlpipe(dev->udev, 0),
+		52, 0x40, 0, 3, (char*)version, strlen(version)+1, HZ*5);
+	if (retval < 0)
+		goto exit;
+		
+	retval = usb_control_msg(dev->udev, usb_rcvctrlpipe(dev->udev, 0),
+		52, 0x40, 0, 4, (char*)uri, strlen(uri)+1, HZ*5);
+	if (retval < 0)
+		goto exit;
+		
+	retval = usb_control_msg(dev->udev, usb_rcvctrlpipe(dev->udev, 0),
+		52, 0x40, 0, 5, (char*)serialNumber, strlen(serialNumber)+1, HZ*5);
+	if (retval < 0)
+		goto exit;
+		
+	printk("\nAccessory identification sent. Attempting accessory mode.\n");
+	
+	
+	retval = usb_control_msg(dev->udev, usb_rcvctrlpipe(dev->udev, 0),
+		53, 0x40, 0, 0, NULL, 0, HZ*5);
+	if (retval < 0)
+		goto exit;
+		
+	
+	return retval;	
+	
+exit:
+	printk("usb_control_msg failed (%d)", retval);
+	return retval;
 
 }
 
