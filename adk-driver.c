@@ -96,7 +96,7 @@ static int testusb_probe (struct usb_interface *interface, const struct usb_devi
 	}
 
 	/* setup into accessory */
-	/*i = setup_accessory(
+	i = setup_accessory(
 		dev,
 		"Nexus-Computing GmbH",
 		"Model",
@@ -104,19 +104,7 @@ static int testusb_probe (struct usb_interface *interface, const struct usb_devi
 		"VersionName",
 		"http://neuxs-computing.ch",
 		"SerialNo.");
-	*/
 	
-	i = usb_control_msg(
-		dev->udev, //usb_device pointer
-		usb_rcvctrlpipe(dev->udev, 0), //pipe
-		51, //request
-		0xc0, //requesttype
-		0x00, //value
-		0x00, //index
-		ioBuffer, //data
-		2, //length
-		100 //timeout
-		);
 	printk("\nADK-probe: accessory setup response: %d\n", i);
 
 	return 0;
