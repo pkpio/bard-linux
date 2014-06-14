@@ -8,6 +8,9 @@
 #define USB_VENDOR_ID 0x04e8
 #define USB_PRODUCT_ID 0x6860
 
+#define USB_VENDOR_ID_1 0x18d1
+#define USB_PRODUCT_ID_1 0x4ee1
+
 /* Structure to hold all of our device specific stuff */
 struct usb_skel {
 	struct usb_device *	udev;			/* the usb device for this device */
@@ -162,7 +165,7 @@ static int setup_accessory(
 	if (retval < 0)
 		goto exit;
 		
-	printk("\nAccessory identification sent. Attempting accessory mode.\n");
+	printk("\nAccessory identification sent. Attempting accessory mode.dd\n");
 	
 	
 	retval = usb_control_msg(dev->udev, usb_rcvctrlpipe(dev->udev, 0),
@@ -187,6 +190,7 @@ static void testusb_disconnect (struct usb_interface *interface){
 /* table of devices that work with this driver */
 static struct usb_device_id test_table [] = {
 	{ USB_DEVICE(USB_VENDOR_ID, USB_PRODUCT_ID) },
+	{ USB_DEVICE(USB_VENDOR_ID_1, USB_PRODUCT_ID_1) },
 	{ } /* Terminating entry */
 };
 
