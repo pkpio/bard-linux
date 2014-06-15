@@ -52,52 +52,6 @@ static int testusb_probe (struct usb_interface *interface, const struct usb_devi
 	dev->udev = interface_to_usbdev(interface);
 	dev->interface = interface;
 
-	iface_desc = interface->cur_altsetting;
-	printk("\nADK-probe: Number endpoints found: %d\n", iface_desc->desc.bNumEndpoints);
-	for (i = 0; i < iface_desc->desc.bNumEndpoints; ++i) {
-		endpoint = &iface_desc->endpoint[i].desc;
-
-		/* for INTERRUPT endpoint */
-		if((endpoint->bmAttributes & USB_ENDPOINT_XFERTYPE_MASK)== USB_ENDPOINT_XFER_INT)
-			printk("\nADK-probe: Found an interrupt endpoint\n");
-			
-		/* for CONTROL endpoint */
-		if((endpoint->bmAttributes & USB_ENDPOINT_XFERTYPE_MASK)== USB_ENDPOINT_XFER_CONTROL)
-			printk("\nADK-probe: Found a control endpoint\n");
-		
-		/* for BULK IN endpoint */
-		if (!dev->bulk_in_endpointAddr &&
-		(endpoint->bEndpointAddress & USB_DIR_IN) &&
-		((endpoint->bmAttributes & USB_ENDPOINT_XFERTYPE_MASK)== USB_ENDPOINT_XFER_BULK)) {
-			/* we found a bulk in endpoint */
-			buffer_size = endpoint->wMaxPacketSize;
-			dev->bulk_in_size = buffer_size;
-			dev->bulk_in_endpointAddr = endpoint->bEndpointAddress;
-			dev->bulk_in_buffer = kmalloc(buffer_size, GFP_KERNEL);
-			if (!dev->bulk_in_buffer) {
-				printk("\nCould not allocate bulk_in_buffer\n");
-				//goto error;
-			} else{
-				printk("\nADK-probe: Found a bulk in interface of size: %d\n", buffer_size);
-			}
-		}
-
-		/* for BULK OUT endpoint */
-		if (!dev->bulk_out_endpointAddr &&
-		!(endpoint->bEndpointAddress & USB_DIR_IN) &&
-		((endpoint->bmAttributes & USB_ENDPOINT_XFERTYPE_MASK)
-			== USB_ENDPOINT_XFER_BULK)) {
-		/* we found a bulk out endpoint */
-			dev->bulk_out_endpointAddr = endpoint->bEndpointAddress;
-			printk("\nADK-probe: Found a bulk out interface of address %x\n", dev->bulk_out_endpointAddr);
-		}
-	}
-
-	if (!(dev->bulk_in_endpointAddr && dev->bulk_out_endpointAddr)) {
-		printk("\nCould not find both bulk-in and bulk-out endpoints\n");
-		//goto error;
-	}
-
 	/* setup into accessory */
 	i = setup_accessory(
 		dev,
@@ -165,7 +119,7 @@ static int setup_accessory(
 	if (retval < 0)
 		goto exit;
 		
-	printk("\nAccessory identification sent. Attempting accessory mode.dd\n");
+	printk("\nAccessory identification sent. Attempting accessory mode.\n");
 	
 	
 	retval = usb_control_msg(dev->udev, usb_rcvctrlpipe(dev->udev, 0),
