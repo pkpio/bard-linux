@@ -5,6 +5,7 @@
 #include <linux/errno.h>
 
 #include "devices.h"
+#include "aoa.h"
 
 /* table of devices that work with this driver */
 static struct usb_device_id test_table [] = {
@@ -36,12 +37,8 @@ static int setup_accessory(
 	const char *serialNumber);
 
 static int testusb_probe (struct usb_interface *interface, const struct usb_device_id *id){
-	struct usb_host_interface *iface_desc;
-	struct usb_endpoint_descriptor *endpoint;
 	struct usb_skel *dev;
-	int buffer_size;
 	int i;
-	unsigned int test;
 	unsigned char ioBuffer[2];
 
 	printk("\ntestusb: probe module\n");
@@ -81,45 +78,49 @@ static int setup_accessory(
 	const char *serialNumber) {
 
 	unsigned char ioBuffer[2];
-	int devVersion;
 	int retval;
-	int tries = 15;
 
 	printk("\nAccessory-Setup: accessory setup started\n");
 	
 	/* send accessory setup sequence */
 	retval = usb_control_msg(dev->udev, usb_rcvctrlpipe(dev->udev, 0),
-		51, 0xc0, 0x00, 0x00, ioBuffer, 2, HZ*5);
+		AOA_GET_PROTOCOL, 0xc0, 0, 0, ioBuffer, 2, HZ*5);
 	if (retval < 0) 
 		goto exit;
 		
 	retval = usb_control_msg(dev->udev, usb_rcvctrlpipe(dev->udev, 0),
-		52, 0x40, 0, 0, (char*)manufacturer, strlen(manufacturer), HZ*5);
+		AOA_SEND_IDENT, 0x40, 0, AOA_STRING_MAN_ID, 
+		(char*)manufacturer, strlen(manufacturer), HZ*5);
 	if (retval < 0)
 		goto exit;
 		
 	retval = usb_control_msg(dev->udev, usb_rcvctrlpipe(dev->udev, 0),
-		52, 0x40, 0, 1, (char*)modelName, strlen(modelName)+1, HZ*5);
+		AOA_SEND_IDENT, 0x40, 0, AOA_STRING_MOD_ID, 
+		(char*)modelName, strlen(modelName)+1, HZ*5);
 	if (retval < 0)
 		goto exit;
 		
 	retval = usb_control_msg(dev->udev, usb_rcvctrlpipe(dev->udev, 0),
-		52, 0x40, 0, 2, (char*)description, strlen(description)+1, HZ*5);
+		AOA_SEND_IDENT, 0x40, 0, AOA_STRING_DSC_ID, 
+		(char*)description, strlen(description)+1, HZ*5);
 	if (retval < 0)
 		goto exit;
 		
 	retval = usb_control_msg(dev->udev, usb_rcvctrlpipe(dev->udev, 0),
-		52, 0x40, 0, 3, (char*)version, strlen(version)+1, HZ*5);
+		AOA_SEND_IDENT, 0x40, 0, AOA_STRING_VER_ID, 
+		(char*)version, strlen(version)+1, HZ*5);
 	if (retval < 0)
 		goto exit;
 		
 	retval = usb_control_msg(dev->udev, usb_rcvctrlpipe(dev->udev, 0),
-		52, 0x40, 0, 4, (char*)uri, strlen(uri)+1, HZ*5);
+		AOA_SEND_IDENT, 0x40, 0, AOA_STRING_URL_ID, 
+		(char*)uri, strlen(uri)+1, HZ*5);
 	if (retval < 0)
 		goto exit;
 		
 	retval = usb_control_msg(dev->udev, usb_rcvctrlpipe(dev->udev, 0),
-		52, 0x40, 0, 5, (char*)serialNumber, strlen(serialNumber)+1, HZ*5);
+		AOA_SEND_IDENT, 0x40, 0, AOA_STRING_SER_ID, 
+		(char*)serialNumber, strlen(serialNumber)+1, HZ*5);
 	if (retval < 0)
 		goto exit;
 		
@@ -127,7 +128,7 @@ static int setup_accessory(
 	
 	
 	retval = usb_control_msg(dev->udev, usb_rcvctrlpipe(dev->udev, 0),
-		53, 0x40, 0, 0, NULL, 0, HZ*5);
+		AOA_START_ACCESSORY, 0x40, 0, 0, NULL, 0, HZ*5);
 	if (retval < 0)
 		goto exit;
 		
