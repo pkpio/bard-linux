@@ -4,12 +4,16 @@
 #include <linux/slab.h>
 #include <linux/errno.h>
 
-/* Define these values to match your devices */
-#define USB_VENDOR_ID 0x04e8
-#define USB_PRODUCT_ID 0x6860
+#include "devices.h"
 
-#define USB_VENDOR_ID_1 0x18d1
-#define USB_PRODUCT_ID_1 0x4ee1
+/* table of devices that work with this driver */
+static struct usb_device_id test_table [] = {
+	{ USB_DEVICE(USB_GOO_VENDOR_ID, USB_N10_PRODUCT_ID) },
+	{ USB_DEVICE(USB_SAM_VENDOR_ID, USB_GS2_PRODUCT_ID) },
+	{ } /* Terminating entry */
+};
+
+MODULE_DEVICE_TABLE (usb, test_table);
 
 /* Structure to hold all of our device specific stuff */
 struct usb_skel {
@@ -139,16 +143,6 @@ exit:
 static void testusb_disconnect (struct usb_interface *interface){
 	printk("\ntestusb: disconnect module\n");
 }
-
-
-/* table of devices that work with this driver */
-static struct usb_device_id test_table [] = {
-	{ USB_DEVICE(USB_VENDOR_ID, USB_PRODUCT_ID) },
-	{ USB_DEVICE(USB_VENDOR_ID_1, USB_PRODUCT_ID_1) },
-	{ } /* Terminating entry */
-};
-
-MODULE_DEVICE_TABLE (usb, test_table);
 
 static struct usb_driver testusb_driver = {
 	.name = "adk-driver",
