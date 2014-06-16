@@ -13,6 +13,8 @@
 static struct usb_device_id adk_devices [] = {
 	{ USB_DEVICE(USB_GOO_VENDOR_ID, USB_N10_PRODUCT_ID) },
 	{ USB_DEVICE(USB_SAM_VENDOR_ID, USB_GS2_PRODUCT_ID) },
+	{ USB_DEVICE(USB_GOO_VENDOR_ID, AOA_ACCESSORY_PID) },
+	{ USB_DEVICE(USB_SAM_VENDOR_ID, AOA_ACCESSORY_PID) },
 	{ } /* Terminating entry */
 };
 
@@ -48,15 +50,19 @@ bard_probe (struct usb_interface *interface, const struct usb_device_id *id)
 	}
 	dev->interface = interface;
 	
-	/* setup into accessory */
-	retval = setup_accessory(
-		dev,
-		"Nexus-Computing GmbH",
-		"Model",
-		"Description",
-		"VersionName",
-		"http://neuxs-computing.ch",
-		"SerialNo.");
+	/* Device attached in normal mode */
+	if(id->idProduct != AOA_ACCESSORY_PID)
+		retval = setup_accessory(
+			dev,
+			"Nexus-Computing GmbH",
+			"Model",
+			"Description",
+			"VersionName",
+			"http://neuxs-computing.ch",
+			"SerialNo.");
+	/* Device attached in accessory mode */
+	else
+		print("Attached as an accessory");
 
 exit:
 	return retval;
