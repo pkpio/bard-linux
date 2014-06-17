@@ -3,6 +3,14 @@
 
 #include "aoa.h"
 
+/* ADK identification params */
+#define ADK_MAN "BeagleBone"			/* Board manufacturer */
+#define ADK_MOD "BeagleBone Black"		/* Board model */
+#define ADK_DES "Development platform"		/* Board description */
+#define ADK_VER "1.0"				/* Board version */
+#define ADK_URI "http://beagleboard.org/"	/* Board url */
+#define ADK_SER "42"				/* Board serial */
+
 /* Structure to hold all of our device specific stuff */
 struct adk_device {
 	struct usb_device 	*udev;		/* usb device for this device */

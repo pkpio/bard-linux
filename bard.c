@@ -158,14 +158,8 @@ bard_probe (struct usb_interface *interface, const struct usb_device_id *id)
 	
 	/* Device attached in normal mode */
 	if(id->idProduct != AOA_ACCESSORY_PID){
-		retval = setup_accessory(
-			dev,
-			"Nexus-Computing GmbH",
-			"Model",
-			"Description",
-			"VersionName",
-			"http://neuxs-computing.ch",
-			"SerialNo.");
+		retval = setup_accessory(dev, ADK_MAN, ADK_MOD, ADK_DES, 
+			 		ADK_VER, ADK_URI, ADK_SER);
 	}
 	/* Device attached in accessory mode */
 	else{
