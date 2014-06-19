@@ -17,6 +17,8 @@ static struct usb_device_id adk_devices [] = {
 	{ USB_DEVICE(USB_GOO_VENDOR_ID, AOA_ACCESSORY_PID) },
 	{ USB_DEVICE(USB_SAM_VENDOR_ID, AOA_ACCESSORY_PID) },
 	{ USB_DEVICE(USB_GOO_VENDOR_ID, USB_N10_DEB_PRODUCT_ID) },
+	{ USB_DEVICE_AND_INTERFACE_INFO(USB_GOO_VENDOR_ID, 
+				AOA_ACCESSORY_ADB_PID, 0xff, 0xff, 0x00) },
 	{ } /* Terminating entry */
 };
 
@@ -98,6 +100,8 @@ adk_write (struct file *file, const char __user *user_buf,
 	u8 buf[8];
 
 	dev = file->private_data;
+	
+	print("Writing to device");
 
 	/* Verify that the device wasn't unplugged. */
 	if (!dev->udev) {
@@ -148,6 +152,8 @@ bard_probe (struct usb_interface *interface, const struct usb_device_id *id)
 		retval = -ENOMEM;
 		goto exit;
 	}
+	
+	printk("Product id is: %04x \n", id->idProduct);
 
 	memset(dev, 0x00, sizeof(*dev));
 	
@@ -158,8 +164,7 @@ bard_probe (struct usb_interface *interface, const struct usb_device_id *id)
 	}
 	
 	/* Device attached in normal mode */
-	if(id->idProduct != AOA_ACCESSORY_PID
-		|| id->idProduct != AOA_ACCESSORY_ADB_PID){
+	if(id->idProduct != AOA_ACCESSORY_ADB_PID){
 		retval = setup_accessory(dev, ADK_MAN, ADK_MOD, ADK_DES, 
 			 		ADK_VER, ADK_URI, ADK_SER);
 	}
