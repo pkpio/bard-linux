@@ -8,7 +8,7 @@
 #define ADK_MOD "BeagleBone Black"		/* Board model */
 #define ADK_DES "Development platform"		/* Board description */
 #define ADK_VER "1.0"				/* Board version */
-#define ADK_URI "http://beagleboard.org/"	/* Board url */
+#define ADK_URI "http://beagleboard.org/\0"	/* Board url */
 #define ADK_SER "42"				/* Board serial */
 
 /* Structure to hold all of our device specific stuff */
@@ -20,7 +20,7 @@ struct adk_device {
 
 static int setup_accessory(
 	const struct adk_device *dev,
-	const char *manufacturer,
+	unsigned char *manufacturer,
 	const char *modelName,
 	const char *description,
 	const char *version,
@@ -42,36 +42,36 @@ static int setup_accessory(
 		
 	retval = usb_control_msg(dev->udev, usb_sndctrlpipe(dev->udev, 0),
 		AOA_SEND_IDENT, 0x40, 0, AOA_STRING_MAN_ID, 
-		(char*)manufacturer, strlen(manufacturer), HZ*5);
+		manufacturer, strlen(manufacturer), HZ*5);
 	printk("Data length: %d\n", retval);
 	if (retval < 0)
 		goto exit;
 		
-	retval = usb_control_msg(dev->udev, usb_rcvctrlpipe(dev->udev, 0),
+	retval = usb_control_msg(dev->udev, usb_sndctrlpipe(dev->udev, 0),
 		AOA_SEND_IDENT, 0x40, 0, AOA_STRING_MOD_ID, 
 		(char*)modelName, strlen(modelName)+1, HZ*5);
 	if (retval < 0)
 		goto exit;
 		
-	retval = usb_control_msg(dev->udev, usb_rcvctrlpipe(dev->udev, 0),
+	retval = usb_control_msg(dev->udev, usb_sndctrlpipe(dev->udev, 0),
 		AOA_SEND_IDENT, 0x40, 0, AOA_STRING_DSC_ID, 
 		(char*)description, strlen(description)+1, HZ*5);
 	if (retval < 0)
 		goto exit;
 		
-	retval = usb_control_msg(dev->udev, usb_rcvctrlpipe(dev->udev, 0),
+	retval = usb_control_msg(dev->udev, usb_sndctrlpipe(dev->udev, 0),
 		AOA_SEND_IDENT, 0x40, 0, AOA_STRING_VER_ID, 
 		(char*)version, strlen(version)+1, HZ*5);
 	if (retval < 0)
 		goto exit;
 		
-	retval = usb_control_msg(dev->udev, usb_rcvctrlpipe(dev->udev, 0),
+	retval = usb_control_msg(dev->udev, usb_sndctrlpipe(dev->udev, 0),
 		AOA_SEND_IDENT, 0x40, 0, AOA_STRING_URL_ID, 
 		(char*)uri, strlen(uri)+1, HZ*5);
 	if (retval < 0)
 		goto exit;
 		
-	retval = usb_control_msg(dev->udev, usb_rcvctrlpipe(dev->udev, 0),
+	retval = usb_control_msg(dev->udev, usb_sndctrlpipe(dev->udev, 0),
 		AOA_SEND_IDENT, 0x40, 0, AOA_STRING_SER_ID, 
 		(char*)serialNumber, strlen(serialNumber)+1, HZ*5);
 	if (retval < 0)
