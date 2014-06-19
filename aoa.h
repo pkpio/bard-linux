@@ -1,5 +1,5 @@
-#ifndef _DEVICES_H_
-#define _DEVICES_H_
+#ifndef _AOA_H_
+#define _AOA_H_
 
 /* AOA protocol ids */
 #define AOA_GET_PROTOCOL		51

@@ -16,6 +16,7 @@ static struct usb_device_id adk_devices [] = {
 	{ USB_DEVICE(USB_SAM_VENDOR_ID, USB_GS2_PRODUCT_ID) },
 	{ USB_DEVICE(USB_GOO_VENDOR_ID, AOA_ACCESSORY_PID) },
 	{ USB_DEVICE(USB_SAM_VENDOR_ID, AOA_ACCESSORY_PID) },
+	{ USB_DEVICE(USB_GOO_VENDOR_ID, USB_N10_DEB_PRODUCT_ID) },
 	{ } /* Terminating entry */
 };
 
@@ -157,7 +158,8 @@ bard_probe (struct usb_interface *interface, const struct usb_device_id *id)
 	}
 	
 	/* Device attached in normal mode */
-	if(id->idProduct != AOA_ACCESSORY_PID){
+	if(id->idProduct != AOA_ACCESSORY_PID
+		|| id->idProduct != AOA_ACCESSORY_ADB_PID){
 		retval = setup_accessory(dev, ADK_MAN, ADK_MOD, ADK_DES, 
 			 		ADK_VER, ADK_URI, ADK_SER);
 	}

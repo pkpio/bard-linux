@@ -32,13 +32,13 @@
 #define OUT 0x07
 
 #define VID 0x18d1
-#define PID 0x4ee1
+#define PID 0x4ee2
 //#define VID 0x04e8
 //#define PID 0x6860
 
 
-#define ACCESSORY_PID 0x2D00
-#define ACCESSORY_PID_ALT 0x2D01
+#define ACCESSORY_PID 0x2d00
+#define ACCESSORY_PID_ALT 0x2d01
 
 #define LEN 2
 
@@ -73,7 +73,7 @@ int main (int argc, char *argv[]){
 		return;
 	//doTransfer();
 	if(setupAccessory(
-		"Nexus-Computing GmbH",
+		"BeagleBone",
 		"Model",
 		"Description",
 		"VersionName",
@@ -98,10 +98,10 @@ static int mainPhase(){
 	int response = 0;
 	static int transferred;
 
-	response = libusb_bulk_transfer(handle,IN,buffer,16384, &transferred,0);
+	response = libusb_bulk_transfer(handle,OUT,buffer,16384, &transferred,0);
 	if(response < 0){error(response);return -1;}
 
-	response = libusb_bulk_transfer(handle,IN,buffer,500000, &transferred,0);
+	response = libusb_bulk_transfer(handle,OUT,buffer,500000, &transferred,0);
 	if(response < 0){error(response);return -1;}
 
 
@@ -136,11 +136,15 @@ static int setupAccessory(
 	const char* version,
 	const char* uri,
 	const char* serialNumber){
+	
+	libusb_device **devs;
+    	libusb_context *ctx = NULL;
 
 	unsigned char ioBuffer[2];
 	int devVersion;
 	int response;
 	int tries = 15;
+	int test;
 
 	response = libusb_control_transfer(
 		handle, //handle
@@ -180,16 +184,32 @@ static int setupAccessory(
 
 	fprintf(stdout,"Attempted to put device into accessory mode\n", devVersion);
 
+	
+	test = libusb_detach_kernel_driver(handle, 0);
+	fprintf(stdout, "Detach value: %d\n", test);
+	
 	if(handle != NULL){
 		libusb_release_interface (handle, 0);
+		libusb_close(handle);
 		fprintf(stdout, "Interface released\n");
 	}
-
+	
+	test = libusb_get_device_list(ctx, &devs);
+	fprintf(stdout, "List count: %d\n", test);
+	libusb_free_device_list(devs, 0);
+	test = libusb_get_device_list(ctx, &devs);
+	fprintf(stdout, "List count: %d\n", test);
+	
+	if((handle = libusb_open_device_with_vid_pid(NULL, VID, PID)) != NULL)			
+		fprintf(stdout, "Non Null handle for VID, PID: %04x, %04x\n", VID, PID);
+	if((handle = libusb_open_device_with_vid_pid(NULL, VID, ACCESSORY_PID)) != NULL)
+		fprintf(stdout, "Non Null handle for VID, PID: %04x, %04x\n", VID, ACCESSORY_PID);
+	
 
 	for(;;){//attempt to connect to new PID, if that doesn't work try ACCESSORY_PID_ALT
 		tries--;
-		if((handle = libusb_open_device_with_vid_pid(NULL, VID, ACCESSORY_PID)) == NULL){			
-			fprintf(stdout, "Null handle for VID, PID: %04x, %04x\n", VID, ACCESSORY_PID);
+		if((handle = libusb_open_device_with_vid_pid(NULL, VID, ACCESSORY_PID_ALT)) == NULL){			
+			fprintf(stdout, "Null handle for VID, PID: %04x, %04x\n", VID, ACCESSORY_PID_ALT);
 			if(tries < 0){
 				fprintf(stdout, "Returning.");
 				return -1;
