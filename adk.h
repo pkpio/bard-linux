@@ -28,8 +28,10 @@ static int setup_accessory(
 	const char *serialNumber) {
 
 	unsigned char ioBuffer[2];
+	int devVersion;
 	int retval;
-
+	
+	printk((char*)manufacturer);
 	printk("\nAccessory-Setup: accessory setup started\n");
 	
 	/* send accessory setup sequence */
@@ -38,9 +40,10 @@ static int setup_accessory(
 	if (retval < 0) 
 		goto exit;
 		
-	retval = usb_control_msg(dev->udev, usb_rcvctrlpipe(dev->udev, 0),
+	retval = usb_control_msg(dev->udev, usb_sndctrlpipe(dev->udev, 0),
 		AOA_SEND_IDENT, 0x40, 0, AOA_STRING_MAN_ID, 
 		(char*)manufacturer, strlen(manufacturer), HZ*5);
+	printk("Data length: %d\n", retval);
 	if (retval < 0)
 		goto exit;
 		
@@ -77,7 +80,7 @@ static int setup_accessory(
 	printk("\nAccessory identification sent. Attempting accessory mode.\n");
 	
 	
-	retval = usb_control_msg(dev->udev, usb_rcvctrlpipe(dev->udev, 0),
+	retval = usb_control_msg(dev->udev, usb_sndctrlpipe(dev->udev, 0),
 		AOA_START_ACCESSORY, 0x40, 0, 0, NULL, 0, HZ*5);
 	if (retval < 0)
 		goto exit;
