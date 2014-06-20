@@ -1,20 +1,15 @@
+Updated: 20th June
+
 Issues:
 
-- usb_control_msg returns error code -110
+- None in particular
 
 
 Goals:
 
-- Fix issue listed above
-- Complete the adk mode setup function
+[] Implement DBG_ERR kind of tags to do all printk's like in missile launcher.
+[] Test file operation functions from userspace.
+[] Rewrite file operation functions with BULK OUT endpoint
+[] Test BULK read and write.
+[] Check the ADB interface BULK IN for ADB logs.
 
-
-References for Issue:
-
-- http://www.makelinux.net/ldd3/chp-13-sect-3 (new)
-- http://libusb.sourceforge.net/api-1.0/group__syncio.html
-- https://www.kernel.org/doc/htmldocs/usb/API-usb-control-msg.html
-
-Notes:
-
-Currently checking if usb_sndctrlpipe returns a proper value. Not sure how to go about it exactly as it always returns some value.
