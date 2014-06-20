@@ -1,12 +1,14 @@
 #include <linux/usb.h>
 #include <linux/slab.h>
+#include <linux/kernel.h>
+#include <linux/module.h>
 
 /* ADK identification params */
 #define ADK_MAN "BeagleBone"			/* Board manufacturer */
 #define ADK_MOD "BeagleBone Black"		/* Board model */
 #define ADK_DES "Development platform"		/* Board description */
 #define ADK_VER "1.0"				/* Board version */
-#define ADK_URI "http://beagleboard.org/\0"	/* Board url */
+#define ADK_URI "http://beagleboard.org/"	/* Board url */
 #define ADK_SER "42"				/* Board serial */
 
 /* AOA protocol ids */
@@ -42,6 +44,27 @@ struct adk_device {
 	unsigned char 		minor;
 };
 
+char* utf8(const char *str)
+{
+	char *utf8;
+	utf8 = kmalloc(1 + (2 * strlen(str)), GFP_KERNEL);
+	printk("Size alloted is: %d bytes\n", 1 + (2 * strlen(str)));
+
+	if (utf8) {
+		char *c = utf8;
+		for (; *str; ++str) {
+			if (*str & 0x80) {
+				*c++ = *str;
+			} else {
+				*c++ = (char) (0xc0 | (unsigned) *str >> 6);
+				*c++ = (char) (0x80 | (*str & 0x3f));
+			}
+		}
+		*c++ = '\0';
+	}
+	return utf8;
+}
+
 static int setup_accessory(
 	const struct adk_device *dev,
 	const char *manufacturer,
@@ -52,7 +75,6 @@ static int setup_accessory(
 	const char *serialNumber) {
 
 	unsigned char ioBuffer[2];
-	int devVersion;
 	int retval;
 	u8 buf[10];
 	
@@ -68,57 +90,71 @@ static int setup_accessory(
 	buf[8] = 0x6E;
 	buf[9] = 0x65;
 	
-	printk((char*)manufacturer);
+	printk(utf8((char *)manufacturer));
 	printk("\nAccessory-Setup: accessory setup started\n");
 	
 	/* send accessory setup sequence */
+	
+	/* Read device version */
 	retval = usb_control_msg(dev->udev, usb_rcvctrlpipe(dev->udev, 0),
 		AOA_GET_PROTOCOL, 0xc0, 0, 0, ioBuffer, 2, HZ*5);
 	if (retval < 0) 
 		goto exit;
 		
+	/* Manufacturer */
 	retval = usb_control_msg(dev->udev, usb_sndctrlpipe(dev->udev, 0),
-		AOA_SEND_IDENT, 0x40, 0, AOA_STRING_MAN_ID, 
-		&buf, sizeof(buf), HZ*5);
-	printk("Data length: %d\n", retval);
+				AOA_SEND_IDENT, 0x40, 0, AOA_STRING_MAN_ID, 
+				utf8((char *)manufacturer), 
+				strlen(utf8((char *)manufacturer)), HZ*5);
 	if (retval < 0)
 		goto exit;
 		
+	/* Modelname */
 	retval = usb_control_msg(dev->udev, usb_sndctrlpipe(dev->udev, 0),
-		AOA_SEND_IDENT, 0x40, 0, AOA_STRING_MOD_ID, 
-		(char*)modelName, strlen(modelName)+1, HZ*5);
+				AOA_SEND_IDENT, 0x40, 0, AOA_STRING_MOD_ID, 
+				utf8((char*)modelName), 
+				strlen(utf8((char*)modelName))+1, HZ*5);
 	if (retval < 0)
 		goto exit;
 		
+	/* Description */
 	retval = usb_control_msg(dev->udev, usb_sndctrlpipe(dev->udev, 0),
-		AOA_SEND_IDENT, 0x40, 0, AOA_STRING_DSC_ID, 
-		(char*)description, strlen(description)+1, HZ*5);
+				AOA_SEND_IDENT, 0x40, 0, AOA_STRING_DSC_ID, 
+				utf8((char*)description), 
+				strlen(utf8((char*)description))+1, HZ*5);
 	if (retval < 0)
 		goto exit;
 		
+	/* Version */
 	retval = usb_control_msg(dev->udev, usb_sndctrlpipe(dev->udev, 0),
-		AOA_SEND_IDENT, 0x40, 0, AOA_STRING_VER_ID, 
-		(char*)version, strlen(version)+1, HZ*5);
+				AOA_SEND_IDENT, 0x40, 0, AOA_STRING_VER_ID, 
+				utf8((char*)version), 
+				strlen(utf8((char*)version))+1, HZ*5);
 	if (retval < 0)
 		goto exit;
 		
+	/* URI */
 	retval = usb_control_msg(dev->udev, usb_sndctrlpipe(dev->udev, 0),
-		AOA_SEND_IDENT, 0x40, 0, AOA_STRING_URL_ID, 
-		(char*)uri, strlen(uri)+1, HZ*5);
+				AOA_SEND_IDENT, 0x40, 0, AOA_STRING_URL_ID, 
+				utf8((char*)uri), 
+				strlen(utf8((char*)uri))+1, HZ*5);
 	if (retval < 0)
 		goto exit;
 		
+	/* Serialnumber */
 	retval = usb_control_msg(dev->udev, usb_sndctrlpipe(dev->udev, 0),
-		AOA_SEND_IDENT, 0x40, 0, AOA_STRING_SER_ID, 
-		(char*)serialNumber, strlen(serialNumber)+1, HZ*5);
+				AOA_SEND_IDENT, 0x40, 0, AOA_STRING_SER_ID, 
+				utf8((char*)serialNumber), 
+				strlen(utf8((char*)serialNumber))+1, HZ*5);
 	if (retval < 0)
 		goto exit;
 		
 	printk("\nAccessory identification sent. Attempting accessory mode.\n");
 	
 	
+	/* Start accessory */
 	retval = usb_control_msg(dev->udev, usb_sndctrlpipe(dev->udev, 0),
-		AOA_START_ACCESSORY, 0x40, 0, 0, NULL, 0, HZ*5);
+				AOA_START_ACCESSORY, 0x40, 0, 0, NULL, 0, HZ*5);
 	if (retval < 0)
 		goto exit;
 		

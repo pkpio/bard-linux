@@ -235,5 +235,5 @@ bard_exit (void)
 module_init(bard_init);
 module_exit(bard_exit);
 
-MODULE_AUTHOR("Praveen Kumar");
+MODULE_AUTHOR("Praveen Kumar Pendyala");
 MODULE_LICENSE("GPL");
