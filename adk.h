@@ -76,21 +76,7 @@ static int setup_accessory(
 
 	unsigned char ioBuffer[2];
 	int retval;
-	u8 buf[10];
 	
-	memset(&buf, 0, sizeof(buf));
-	buf[0] = 0x42;
-	buf[1] = 0x65;
-	buf[2] = 0x61;
-	buf[3] = 0x67;
-	buf[4] = 0x6C;
-	buf[5] = 0x65;
-	buf[6] = 0x42;
-	buf[7] = 0x6F;
-	buf[8] = 0x6E;
-	buf[9] = 0x65;
-	
-	printk(utf8((char *)manufacturer));
 	printk("\nAccessory-Setup: accessory setup started\n");
 	
 	/* send accessory setup sequence */
