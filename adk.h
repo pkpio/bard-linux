@@ -44,7 +44,7 @@ struct adk_device {
 
 static int setup_accessory(
 	const struct adk_device *dev,
-	unsigned char *manufacturer,
+	const char *manufacturer,
 	const char *modelName,
 	const char *description,
 	const char *version,
@@ -54,6 +54,19 @@ static int setup_accessory(
 	unsigned char ioBuffer[2];
 	int devVersion;
 	int retval;
+	u8 buf[10];
+	
+	memset(&buf, 0, sizeof(buf));
+	buf[0] = 0x42;
+	buf[1] = 0x65;
+	buf[2] = 0x61;
+	buf[3] = 0x67;
+	buf[4] = 0x6C;
+	buf[5] = 0x65;
+	buf[6] = 0x42;
+	buf[7] = 0x6F;
+	buf[8] = 0x6E;
+	buf[9] = 0x65;
 	
 	printk((char*)manufacturer);
 	printk("\nAccessory-Setup: accessory setup started\n");
@@ -66,7 +79,7 @@ static int setup_accessory(
 		
 	retval = usb_control_msg(dev->udev, usb_sndctrlpipe(dev->udev, 0),
 		AOA_SEND_IDENT, 0x40, 0, AOA_STRING_MAN_ID, 
-		manufacturer, strlen(manufacturer), HZ*5);
+		&buf, sizeof(buf), HZ*5);
 	printk("Data length: %d\n", retval);
 	if (retval < 0)
 		goto exit;
