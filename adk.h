@@ -30,12 +30,12 @@
 #define AOA_STRING_SER_ID		5
 
 /* AOA Product IDs */
-#define AOA_ACCESSORY_PID		0x2d00	/* accessory */
-#define AOA_ACCESSORY_ADB_PID		0x2d01	/* accessory + adb */
-#define AOA_AUDIO_PID			0x2D02	/* audio */
-#define AOA_AUDIO_ADB_PID		0x2D03	/* audio + adb */
-#define AOA_ACCESSORY_AUDIO_PID		0x2D04	/* accessory + audio */
-#define AOA_ACCESSORY_AUDIO_ADB_PID	0x2D05	/* accessory + audio + adb */
+#define AOA_ACC_PID		0x2d00	/* accessory */
+#define AOA_ACC_ADB_PID		0x2d01	/* accessory + adb */
+#define AOA_AUD_PID		0x2D02	/* audio */
+#define AOA_AUD_ADB_PID		0x2D03	/* audio + adb */
+#define AOA_ACC_AUD_PID		0x2D04	/* accessory + audio */
+#define AOA_ACC_AUD_ADB_PID	0x2D05	/* accessory + audio + adb */
 
 /* Structure to hold all of our device specific stuff */
 struct adk_device {

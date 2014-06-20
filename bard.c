@@ -12,13 +12,13 @@
 
 /* table of devices that work with this driver */
 static struct usb_device_id adk_devices [] = {
-	{ USB_DEVICE(USB_GOO_VENDOR_ID, USB_N10_PRODUCT_ID) },
-	{ USB_DEVICE(USB_SAM_VENDOR_ID, USB_GS2_PRODUCT_ID) },
-	{ USB_DEVICE(USB_GOO_VENDOR_ID, AOA_ACCESSORY_PID) },
-	{ USB_DEVICE(USB_SAM_VENDOR_ID, AOA_ACCESSORY_PID) },
-	{ USB_DEVICE(USB_GOO_VENDOR_ID, USB_N10_DEB_PRODUCT_ID) },
-	{ USB_DEVICE_AND_INTERFACE_INFO(USB_GOO_VENDOR_ID, 
-				AOA_ACCESSORY_ADB_PID, 0xff, 0xff, 0x00) },
+	{ USB_DEVICE(USB_GOO_VID, USB_N10_PID) },
+	{ USB_DEVICE(USB_SAM_VID, USB_GS2_PID) },
+	{ USB_DEVICE(USB_GOO_VID, AOA_ACC_PID) },
+	{ USB_DEVICE(USB_SAM_VID, AOA_ACC_PID) },
+	{ USB_DEVICE(USB_GOO_VID, USB_N10_DEB_PID) },
+	{ USB_DEVICE_AND_INTERFACE_INFO(USB_GOO_VID, AOA_ACC_ADB_PID, 
+					0xff, 0xff, 0x00) },
 	{ } /* Terminating entry */
 };
 
@@ -164,7 +164,7 @@ bard_probe (struct usb_interface *interface, const struct usb_device_id *id)
 	}
 	
 	/* Device attached in normal mode */
-	if(id->idProduct != AOA_ACCESSORY_ADB_PID){
+	if(id->idProduct != AOA_ACC_ADB_PID){
 		retval = setup_accessory(dev, ADK_MAN, ADK_MOD, ADK_DES, 
 			 		ADK_VER, ADK_URI, ADK_SER);
 	}
