@@ -185,7 +185,7 @@ bard_probe (struct usb_interface *interface, const struct usb_device_id *id)
 
 		dev->minor = interface->minor;
 
-		printk("New ADK device attached to /dev/adk%d\n",
+		printk("New ADK device attached to /dev/bard%d\n",
 				interface->minor - BARD_MINOR_BASE);
 		
 	}
