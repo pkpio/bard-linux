@@ -12,4 +12,5 @@ Goals:
 [] Rewrite file operation functions with BULK OUT endpoint
 [] Test BULK read and write.
 [] Check the ADB interface BULK IN for ADB logs.
+[] A better way for char to HEX UTF8 coversion.
 
