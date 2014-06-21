@@ -127,6 +127,22 @@ adk_write (struct file *file, const char __user *user_buf,
 	}
 
 	printk("%d %d\n", buf[0], buf[1]);
+	
+	/* do a blocking bulk read to get data from the device */
+	retval = usb_bulk_msg(dev->udev,
+		      usb_rcvbulkpipe(dev->udev, dev->bulk_in_add),
+		      dev->bulk_in_buffer,
+		      min(dev->bulk_in_size, count),
+		      &count, HZ*10);
+
+	/* if the read was successful, copy the data to user space */
+	if (!retval) {
+		print("Read successful");
+		/*if (copy_to_user(buffer, dev->bulk_in_buffer, count))
+			retval = -EFAULT;
+		else
+			retval = count;*/
+	}
 
 exit:
 	return retval;
@@ -163,8 +179,14 @@ set_bulk_address (
 			== USB_ENDPOINT_XFER_BULK){
 			
 			/* bulk in */
-			if(endpoint->bEndpointAddress & USB_DIR_IN)
+			if(endpoint->bEndpointAddress & USB_DIR_IN) {
 				dev->bulk_in_add = endpoint->bEndpointAddress;
+				dev->bulk_in_size = endpoint->wMaxPacketSize;
+				dev->bulk_in_buffer = kmalloc(dev->bulk_in_size,
+							 	GFP_KERNEL);
+				if (!dev->bulk_in_buffer)
+					print("Could not allocate bulk buffer");
+			}
 			
 			/* bulk out */
 			else

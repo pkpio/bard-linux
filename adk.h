@@ -42,6 +42,8 @@ struct adk_device {
 	struct usb_device 	*udev;		/* usb device for this device */
 	struct usb_interface 	*interface;	/* interface for this device */
 	unsigned char 		minor;		/* minor value */
+	unsigned char *		bulk_in_buffer;	/* the buffer to in data */
+	size_t			bulk_in_size;	/* the size of the in buffer */
 	__u8			bulk_in_add;	/* bulk in endpoint address */
 	__u8			bulk_out_add;	/* bulk out endpoint address */
 	struct kref		kref;		/* module references counter */
