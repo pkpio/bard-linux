@@ -145,6 +145,34 @@ static struct usb_class_driver bard_usb_class = {
 	.minor_base = BARD_MINOR_BASE,
 };
 
+static void
+set_bulk_address (
+	struct adk_device *dev,
+	struct usb_interface *interface)
+{
+	struct usb_endpoint_descriptor *endpoint;
+	struct usb_host_interface *iface_desc;
+	int i;
+	
+	iface_desc = interface->cur_altsetting;
+	for (i = 0; i < iface_desc->desc.bNumEndpoints; ++i) {
+		endpoint = &iface_desc->endpoint[i].desc;
+		
+		/* check for bulk endpoint */
+		if ((endpoint->bmAttributes & USB_ENDPOINT_XFERTYPE_MASK) 
+			== USB_ENDPOINT_XFER_BULK){
+			
+			/* bulk in */
+			if(endpoint->bEndpointAddress & USB_DIR_IN)
+				dev->bulk_in_add = endpoint->bEndpointAddress;
+			
+			/* bulk out */
+			else
+				dev->bulk_out_add = endpoint->bEndpointAddress;	
+		}
+	}
+}
+
 static int
 bard_probe (struct usb_interface *interface, const struct usb_device_id *id)
 {
@@ -177,11 +205,16 @@ bard_probe (struct usb_interface *interface, const struct usb_device_id *id)
 	else{
 		print("Attached as an accessory");
 		dev->interface = interface;
+		kref_init(&dev->kref);
 		
-		/* Save our data pointer in this interface device. */
+		/* save our data pointer in this interface device. */
 		usb_set_intfdata(interface, dev);
 		
-		/* We can register the device now, as it is ready. */
+		kref_init(&dev->kref);
+		set_bulk_address(dev, interface);
+		printk("Bulk values: %04x, %04x\n", dev->bulk_in_add, dev->bulk_out_add);
+		
+		/* register the device now */
 		retval = usb_register_dev(interface, &bard_usb_class);
 		if (retval) {
 			usb_set_intfdata(interface, NULL);
