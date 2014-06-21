@@ -35,6 +35,7 @@ print (char *msg)
 static inline void
 adk_delete (struct adk_device *dev)
 {
+	print("adk_delete: deleting dev");
 	kfree(dev);
 }
 
@@ -46,6 +47,7 @@ adk_open (struct inode *inode, struct file *file)
 	int subminor;
 	int retval = 0;
 
+	print("adk_open: Device opened");
 	subminor = iminor(inode);
 
 	interface = usb_find_interface(&bard_driver, subminor);
@@ -60,6 +62,8 @@ adk_open (struct inode *inode, struct file *file)
 		print("Device NULL!");
 		retval = -ENODEV;
 		goto exit;
+	} else {
+		print("Non Null device found");
 	}
 
 	file->private_data = dev;
@@ -74,6 +78,7 @@ adk_release (struct inode *inode, struct file *file)
 	struct adk_device *dev = NULL;
 	int retval = 0;
 
+	print("adk_release: Device released");
 	dev = file->private_data;
 
 	if (!dev) {
@@ -101,7 +106,7 @@ adk_write (struct file *file, const char __user *user_buf,
 
 	dev = file->private_data;
 	
-	print("Writing to device");
+	print("adk_write: Writing to device");
 
 	/* Verify that the device wasn't unplugged. */
 	if (!dev->udev) {
