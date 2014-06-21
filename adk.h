@@ -41,13 +41,16 @@
 struct adk_device {
 	struct usb_device 	*udev;		/* usb device for this device */
 	struct usb_interface 	*interface;	/* interface for this device */
-	unsigned char 		minor;
+	unsigned char 		minor;		/* minor value */
+	__u8			bulk_in_add;	/* bulk in endpoint address */
+	__u8			bulk_out_add;	/* bulk out endpoint address */
+	struct kref		kref;		/* module references counter */
 };
 
 char* utf8(const char *str)
 {
 	char *utf8;
-	utf8 = kmalloc(1 + (2 * strlen(str)), GFP_KERNEL);
+	utf8 = kmalloc(1+(2*strlen(str)), GFP_KERNEL);
 
 	if (utf8) {
 		char *c = utf8;
