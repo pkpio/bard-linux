@@ -48,7 +48,6 @@ char* utf8(const char *str)
 {
 	char *utf8;
 	utf8 = kmalloc(1 + (2 * strlen(str)), GFP_KERNEL);
-	printk("Size alloted is: %d bytes\n", 1 + (2 * strlen(str)));
 
 	if (utf8) {
 		char *c = utf8;
