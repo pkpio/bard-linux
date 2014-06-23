@@ -151,6 +151,17 @@ adk_write (struct file *file, const char __user *user_buf,
 	
 	printk("Bulk transfer return code: %d\n", retval);
 	printk("Actual length is: %d\n", transferred);
+	
+	retval = usb_bulk_msg(dev->udev,
+			usb_rcvbulkpipe(dev->udev, dev->bulk_in_add),
+			dev->bulk_in_buffer, 
+			min(dev->bulk_in_size, transferred),
+			&transferred, HZ*10);
+			
+	printk("Bulk transfer return code: %d\n", retval);
+	printk("Actual length is: %d\n", transferred);
+	
+	printk("Data received: %d\n", dev->bulk_in_buffer);
 
 	/* if the read was successful, copy the data to user space /
 	if (!retval) {
