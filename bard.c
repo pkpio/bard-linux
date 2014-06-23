@@ -277,7 +277,23 @@ error:
 
 static void
 bard_disconnect (struct usb_interface *interface){
-	print("Device disconnected");
+	struct adk_device *dev;
+	int minor=0;
+
+	dev = usb_get_intfdata(interface);
+	//usb_set_intfdata(interface, NULL);
+
+	//minor = dev->minor;
+
+	/* Give back our minor. */
+	if(dev != NULL)
+		usb_deregister_dev(interface, &bard_usb_class);
+	else
+		printk("bard_disconnect: Dev is null!\n");
+	//adk_delete(dev);
+
+	printk("ADK device /dev/adk%d now disconnected\n",
+		minor - BARD_MINOR_BASE);
 }
 
 static struct usb_driver bard_driver = {
