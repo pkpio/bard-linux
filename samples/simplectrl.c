@@ -93,16 +93,48 @@ int main (int argc, char *argv[]){
 	return 0;
 }
 
+char* utf8(const char *str)
+{
+	char *utf8;
+	utf8 = malloc(1+(2*strlen(str)));
+
+	if (utf8) {
+		char *c = utf8;
+		for (; *str; ++str) {
+			if (*str & 0x80) {
+				*c++ = *str;
+			} else {
+				*c++ = (char) (0xc0 | (unsigned) *str >> 6);
+				*c++ = (char) (0x80 | (*str & 0x3f));
+			}
+		}
+		*c++ = '\0';
+	}
+	return utf8;
+}
+
 static int mainPhase(){
 	unsigned char buffer[500000];
 	int response = 0;
 	static int transferred;
+	FILE *f = fopen("file0.txt", "w");
+	FILE *f0 = fopen("file.txt", "w");
+	if (f == NULL)
+	{
+	    printf("Error opening file!\n");
+	}
+	
+	printf(stdout, "Buffer values: %u\n", buffer[0]);
 
-	response = libusb_bulk_transfer(handle,OUT,buffer,16384, &transferred,0);
+	response = libusb_bulk_transfer(handle,IN,buffer,16384, &transferred,0);
 	if(response < 0){error(response);return -1;}
+	fprintf(f0, buffer);
 
-	response = libusb_bulk_transfer(handle,OUT,buffer,500000, &transferred,0);
+	response = libusb_bulk_transfer(handle,IN,buffer,500000, &transferred,0);
 	if(response < 0){error(response);return -1;}
+	
+	printf(stdout, buffer);
+	fprintf(f, buffer);
 
 
 }
