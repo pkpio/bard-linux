@@ -103,17 +103,19 @@ adk_write (struct file *file, const char __user *user_buf,
 	struct adk_device *dev;
 	int retval = 0;
 	u8 buf[8];
-	unsigned char buffer[200];
+	//unsigned char buffer[200];
 	static int transferred = 0;
 	int i = 0;
+	unsigned long test = 0;
 
 	dev = file->private_data;
 	
 	print("adk_write: Writing to device");
 	
+	/*
 	for(i=0;i<180;i++){
 		buffer[i] = 0x6f;
-	}
+	}*/
 
 	/* Verify that the device wasn't unplugged. */
 	if (!dev->udev) {
@@ -134,13 +136,19 @@ adk_write (struct file *file, const char __user *user_buf,
 	}
 
 	printk("%d %d\n", buf[0], buf[1]);
+	
+	/*test */
+	test = usb_rcvctrlpipe(dev->udev, 0);
+	printk("Control pipe value: %lu\n", test);
 		
 	/* do a blocking bulk write to the device */
-	retval = usb_bulk_msg(dev->udev,
+	test = usb_sndbulkpipe(dev->udev, dev->bulk_out_add);
+	printk("Bulk pipe value: %lu\n", test);
+	
+	/*retval = usb_bulk_msg(dev->udev,
 		      usb_sndbulkpipe(dev->udev, dev->bulk_out_add),
-		      buffer, 168, &transferred, HZ*5);
+		      buffer, 168, &transferred, HZ*5);*/
 		      
-	printk("Return code: %d\n", retval);
 	printk("Actual length is: %d\n", transferred);
 
 	/* if the read was successful, copy the data to user space /
