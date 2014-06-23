@@ -7,6 +7,7 @@ Issues:
 
 Goals:
 
+[] Fix kernel pagging issue with buffer allocation
 [] Implement DBG_ERR kind of tags to do all printk's like in missile launcher.
 [] Test file operation functions from userspace.
 [] Rewrite file operation functions with BULK OUT endpoint
