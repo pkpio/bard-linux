@@ -12,7 +12,7 @@ void send_cmd(int fd, int cmd)
 	int i = 0;
 	char buffer[6];
 	
-	for(i=0;i<5;i++){
+	for(i=0;i<6;i++){
 		buffer[i] = 0x6f;
 	}
 	
