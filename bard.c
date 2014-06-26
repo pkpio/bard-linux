@@ -151,7 +151,7 @@ adk_write (struct file *file, const char __user *user_buf,
 		goto exit;
 		
 	memset(&buffer, 0, sizeof(buffer));
-	if(copy_from_user(buffer, user_buf, min(sizeof(buffer), count+1))){
+	if(copy_from_user(buffer, user_buf, min(sizeof(buffer), count))){
 		retval = -EFAULT;
 		goto exit;
 	}
@@ -159,7 +159,7 @@ adk_write (struct file *file, const char __user *user_buf,
 	/* do a blocking bulk write to the device */	
 	retval = usb_bulk_msg(dev->udev,
 		      usb_sndbulkpipe(dev->udev, dev->bulk_out_add),
-		      buffer, count+1, &transferred, HZ*5);
+		      buffer, count, &transferred, HZ*5);
 	
 	
 	printk("Bulk transfer return code: %d\n", retval);
