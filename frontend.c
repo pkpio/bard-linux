@@ -9,8 +9,14 @@
 void send_cmd(int fd, int cmd)
 {
 	int retval = 0;
+	int i = 0;
+	char buffer[16384];
 	
-	retval = write(fd, &cmd, 1);
+	for(i=0;i<16383;i++){
+		buffer[i] = 0x6f;
+	}
+	
+	retval = write(fd, buffer, 16384);
 	if (retval < 0)
 		fprintf(stderr, "an error occured: %d\n", retval);
 }
