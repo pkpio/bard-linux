@@ -95,6 +95,37 @@ exit:
 }
 
 static ssize_t
+adk_read (struct file *file, char __user *user_buf,
+	 size_t count, loff_t *ppos)
+{
+	int retval = 0;
+	struct adk_device *dev;
+	
+	print("adk_write: Reading from device");
+	
+	dev = file->private_data;
+	
+	/* do a blocking bulk read to get data from the device */
+	retval = usb_bulk_msg(dev->udev,
+		      usb_rcvbulkpipe(dev->udev, dev->bulk_in_add),
+		      dev->bulk_in_buffer,
+		      min(dev->bulk_in_size, count),
+		      &count, HZ*20);
+	
+	printk("BARD: Bulk read return code: %d\n", retval);
+
+	/* if the read was successful, copy the data to user space */
+	if (!retval) {
+	    if (copy_to_user(user_buf, dev->bulk_in_buffer, count))
+		retval = -EFAULT;
+	    else
+		retval = count;
+	}
+	
+	return retval;
+}
+
+static ssize_t
 adk_write (struct file *file, const char __user *user_buf,
 	 size_t count, loff_t *ppos)
 {
@@ -135,25 +166,6 @@ adk_write (struct file *file, const char __user *user_buf,
 	
 	printk("Bulk transfer return code: %d\n", retval);
 	printk("Actual length is: %d\n", transferred);
-	
-	retval = usb_bulk_msg(dev->udev,
-			usb_rcvbulkpipe(dev->udev, dev->bulk_in_add),
-			buf, sizeof(buf),
-			&transferred, 0);
-			
-	printk("Bulk transfer return code: %d\n", retval);
-	printk("Actual length is: %d\n", transferred);
-	
-	printk("Data received: %d\n", buf[0]);
-
-	/* if the read was successful, copy the data to user space /
-	if (!retval) {
-		print("Read successful");
-		if (copy_to_user(buffer, dev->bulk_in_buffer, count))
-			retval = -EFAULT;
-		else
-			retval = count;/
-	}*/
 
 exit:
 	return retval;
@@ -162,6 +174,7 @@ exit:
 static struct file_operations adk_fops = {
 	.owner =	THIS_MODULE,
 	.write =	adk_write,
+	.read =		adk_read,
 	.open =		adk_open,
 	.release =	adk_release,
 };
