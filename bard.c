@@ -161,7 +161,7 @@ adk_write (struct file *file, const char __user *user_buf,
 	
 	retval = usb_bulk_msg(dev->udev,
 		      usb_sndbulkpipe(dev->udev, dev->bulk_out_add),
-		      buffer, 3, &transferred, HZ*5);
+		      user_buf, count, &transferred, HZ*5);
 	
 	
 	printk("Bulk transfer return code: %d\n", retval);
