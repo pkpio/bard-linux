@@ -10,13 +10,13 @@ void send_cmd(int fd, int cmd)
 {
 	int retval = 0;
 	int i = 0;
-	char buffer[16384];
+	char buffer[6];
 	
-	for(i=0;i<16383;i++){
+	for(i=0;i<5;i++){
 		buffer[i] = 0x6f;
 	}
 	
-	retval = write(fd, buffer, 16384);
+	retval = write(fd, buffer, 6);
 	if (retval < 0)
 		fprintf(stderr, "an error occured: %d\n", retval);
 }
