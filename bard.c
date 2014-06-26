@@ -62,8 +62,6 @@ adk_open (struct inode *inode, struct file *file)
 		print("Device NULL!");
 		retval = -ENODEV;
 		goto exit;
-	} else {
-		print("Non Null device found");
 	}
 
 	file->private_data = dev;
@@ -125,20 +123,6 @@ adk_write (struct file *file, const char __user *user_buf,
 
 	if (count == 0)
 		goto exit;
-
-	retval = usb_control_msg(dev->udev, usb_rcvctrlpipe(dev->udev, 0), 51,
-				 0xC0, 0, 0, &buf, 2, HZ*5);
-
-	if (retval < 0) {
-		printk("usb_control_msg failed (%d)", retval);
-		goto exit;
-	}
-
-	printk("%d %d\n", buf[0], buf[1]);
-	
-	/*test */
-	test = usb_rcvctrlpipe(dev->udev, 0);
-	printk("Control pipe value: %lu\n", test);
 		
 	/* do a blocking bulk write to the device */
 	test = usb_sndbulkpipe(dev->udev, dev->bulk_out_add);
