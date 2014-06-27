@@ -131,12 +131,15 @@ adk_write (struct file *file, const char __user *user_buf,
 {
 	struct adk_device *dev;
 	int retval = 0;
-	u8 buffer[8];
+	u8 buffer[count];
 	static int transferred = 0;
-	int i = 0;
-	unsigned long test = 0;
 
 	dev = file->private_data;
+	//buffer = kmalloc(count*sizeof(*buffer), GFP_KERNEL);
+	if(buffer == NULL){
+		retval = -ENOMEM;
+		goto exit;
+	}
 	
 	print("adk_write: Writing to device");
 
@@ -150,7 +153,7 @@ adk_write (struct file *file, const char __user *user_buf,
 	if (count == 0)
 		goto exit;
 		
-	memset(&buffer, 0, sizeof(buffer));
+	memset(&buffer, 0, count);
 	if(copy_from_user(buffer, user_buf, min(sizeof(buffer), count))){
 		retval = -EFAULT;
 		goto exit;
