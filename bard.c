@@ -131,11 +131,11 @@ adk_write (struct file *file, const char __user *user_buf,
 {
 	struct adk_device *dev;
 	int retval = 0;
-	u8 buffer[count];
+	u8 *buffer;
 	static int transferred = 0;
 
 	dev = file->private_data;
-	//buffer = kmalloc(count*sizeof(*buffer), GFP_KERNEL);
+	buffer = kmalloc(count*sizeof(*buffer), GFP_KERNEL);
 	if(buffer == NULL){
 		retval = -ENOMEM;
 		goto exit;
@@ -153,7 +153,7 @@ adk_write (struct file *file, const char __user *user_buf,
 	if (count == 0)
 		goto exit;
 		
-	memset(&buffer, 0, count);
+	memset(buffer, 0, count);
 	if(copy_from_user(buffer, user_buf, min(sizeof(buffer), count))){
 		retval = -EFAULT;
 		goto exit;
