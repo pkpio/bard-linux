@@ -154,7 +154,7 @@ adk_write (struct file *file, const char __user *user_buf,
 		goto exit;
 		
 	memset(buffer, 0, count);
-	if(copy_from_user(buffer, user_buf, min(sizeof(buffer), count))){
+	if(copy_from_user(buffer, user_buf, count)){
 		retval = -EFAULT;
 		goto exit;
 	}
