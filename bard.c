@@ -141,7 +141,7 @@ adk_write (struct file *file, const char __user *user_buf,
 		goto exit;
 	}
 	
-	print("adk_write: Writing to device");
+	//print("adk_write: Writing to device");
 
 	/* Verify that the device wasn't unplugged. */
 	if (!dev->udev) {
@@ -165,8 +165,9 @@ adk_write (struct file *file, const char __user *user_buf,
 		      buffer, count, &transferred, HZ*5);
 	
 	
-	printk("Bulk transfer return code: %d\n", retval);
-	printk("Actual length is: %d\n", transferred);
+	//printk("Bulk transfer return code: %d\n", retval);
+	//printk("Actual length is: %d\n", transferred);
+	kfree(buffer);
 
 exit:
 	return retval;
