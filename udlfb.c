@@ -850,6 +850,7 @@ error:
 
 #endif
 
+/*
 static int dlfb_get_edid(struct dlfb_data *dev, char *edid, int len)
 {
 	int i;
@@ -877,6 +878,7 @@ static int dlfb_get_edid(struct dlfb_data *dev, char *edid, int len)
 
 	return i;
 }
+*/
 
 static int dlfb_ops_ioctl(struct fb_info *info, unsigned int cmd,
 				unsigned long arg)
@@ -1341,7 +1343,7 @@ error:
 }
 
 /*
- * 1) Get EDID from hw, or use sw default
+ * 1) Get EDID from hw, or use sw defaultstatic int dlfb_setup_modes
  * 2) Parse into various fb_info structs
  * 3) Allocate virtual framebuffer memory to back highest res mode
  *
@@ -1358,10 +1360,10 @@ static int dlfb_setup_modes(struct dlfb_data *dev,
 			   struct fb_info *info,
 			   char *default_edid, size_t default_edid_size)
 {
-	int i;
+	int i, j;
 	const struct fb_videomode *default_vmode = NULL;
 	int result = 0;
-	char *edid;
+	char *edid = NULL;
 	int tries = 3;
 
 	if (info->dev) /* only use mutex if info has been registered */
@@ -1371,6 +1373,10 @@ static int dlfb_setup_modes(struct dlfb_data *dev,
 	if (!edid) {
 		result = -ENOMEM;
 		goto error;
+	}
+	
+	for(j = 0; j < EDID_LENGTH; j++){
+		edid[j] = sony_sdmhs53_edid[j];
 	}
 
 	fb_destroy_modelist(&info->modelist);
@@ -1383,10 +1389,14 @@ static int dlfb_setup_modes(struct dlfb_data *dev,
 	 */
 	while (tries--) {
 
-		i = dlfb_get_edid(dev, edid, EDID_LENGTH);
-
-		if (i >= EDID_LENGTH)
+		//i = dlfb_get_edid(dev, edid, EDID_LENGTH);
+		i = 128;
+		
+		if (i >= EDID_LENGTH){
 			fb_edid_to_monspecs(edid, &info->monspecs);
+			pr_warn("teste\t%x",edid[8]);
+			pr_warn("teste\t%x",sony_sdmhs53_edid[8]);
+		}
 
 		if (info->monspecs.modedb_len > 0) {
 			dev->edid = edid;
@@ -1462,8 +1472,10 @@ static int dlfb_setup_modes(struct dlfb_data *dev,
 		 * default to resolution safe for projectors
 		 * (since they are most common case without EDID)
 		 */
-		fb_vmode.xres = 800;
-		fb_vmode.yres = 600;
+		//fb_vmode.xres = 800;
+		//fb_vmode.yres = 600;
+		fb_vmode.xres = 1024;
+		fb_vmode.yres = 768;
 		fb_vmode.refresh = 60;
 		default_vmode = fb_find_nearest_mode(&fb_vmode,
 						     &info->modelist);
