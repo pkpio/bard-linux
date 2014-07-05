@@ -1394,8 +1394,8 @@ static int dlfb_setup_modes(struct dlfb_data *dev,
 		
 		if (i >= EDID_LENGTH){
 			fb_edid_to_monspecs(edid, &info->monspecs);
-			pr_warn("teste\t%x",edid[8]);
-			pr_warn("teste\t%x",sony_sdmhs53_edid[8]);
+			pr_warn("teste\t%x\n",edid[8]);
+			pr_warn("teste\t%x\n",sony_sdmhs53_edid[8]);
 		}
 
 		if (info->monspecs.modedb_len > 0) {
