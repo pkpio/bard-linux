@@ -362,6 +362,8 @@ static int dlfb_ops_mmap(struct fb_info *info, struct vm_area_struct *vma)
 	unsigned long size = vma->vm_end - vma->vm_start;
 	unsigned long offset = vma->vm_pgoff << PAGE_SHIFT;
 	unsigned long page, pos;
+	
+	printk("dlfb_ops_mmap called\n");
 
 	if (offset + size > info->fix.smem_len)
 		return -EINVAL;
@@ -674,6 +676,8 @@ static ssize_t dlfb_ops_read(struct fb_info *info, char __user *buf,
 			 size_t count, loff_t *ppos)
 {
 	ssize_t result = -ENOSYS;
+	
+	printk("dlfb_ops_read called\n");
 
 #if defined CONFIG_FB_SYS_FOPS
 	result = fb_sys_read(info, buf, count, ppos);
@@ -717,6 +721,7 @@ static ssize_t dlfb_ops_write(struct fb_info *info, const char __user *buf,
 static void dlfb_ops_copyarea(struct fb_info *info,
 				const struct fb_copyarea *area)
 {
+	printk("dlfb_ops_copyarea called\n");
 #if defined CONFIG_FB_SYS_COPYAREA
 
 	struct dlfb_data *dev = info->par;
@@ -732,6 +737,7 @@ static void dlfb_ops_copyarea(struct fb_info *info,
 static void dlfb_ops_imageblit(struct fb_info *info,
 				const struct fb_image *image)
 {
+	printk("dlfb_ops_imageblit called\n");
 #if defined CONFIG_FB_SYS_IMAGEBLIT
 
 	struct dlfb_data *dev = info->par;
@@ -748,6 +754,7 @@ static void dlfb_ops_imageblit(struct fb_info *info,
 static void dlfb_ops_fillrect(struct fb_info *info,
 			  const struct fb_fillrect *rect)
 {
+	printk("dlfb_ops_fillrect called\n");
 #if defined CONFIG_FB_SYS_FILLRECT
 
 	struct dlfb_data *dev = info->par;
@@ -857,6 +864,8 @@ static int dlfb_ops_ioctl(struct fb_info *info, unsigned int cmd,
 {
 
 	struct dlfb_data *dev = info->par;
+	
+	printk("dlfb_ops_ioctl called\n");
 
 	if (!atomic_read(&dev->usb_active))
 		return 0;
@@ -914,6 +923,8 @@ dlfb_ops_setcolreg(unsigned regno, unsigned red, unsigned green,
 {
 	int err = 0;
 
+	printk("dlfb_ops_setcolreg called\n");	
+	
 	if (regno >= info->cmap.len)
 		return 1;
 
@@ -942,6 +953,8 @@ dlfb_ops_setcolreg(unsigned regno, unsigned red, unsigned green,
 static int dlfb_ops_open(struct fb_info *info, int user)
 {
 	struct dlfb_data *dev = info->par;
+	
+	printk("dlfb_ops_open called\n");
 
 	/*
 	 * fbcon aggressively connects to first framebuffer it finds,
@@ -1053,6 +1066,8 @@ static int dlfb_ops_release(struct fb_info *info, int user)
 {
 	struct dlfb_data *dev = info->par;
 
+	printk("dlfb_ops_release called\n");	
+	
 	dev->fb_count--;
 
 	/* We can't free fb_info here - fbmem will touch it when we return */
@@ -1113,6 +1128,8 @@ static int dlfb_ops_check_var(struct fb_var_screeninfo *var,
 				struct fb_info *info)
 {
 	struct fb_videomode mode;
+	
+	printk("dlfb_ops_check_var called\n");
 
 	/* TODO: support dynamically changing framebuffer size */
 	if ((var->xres * var->yres * 2) > info->fix.smem_len)
@@ -1135,6 +1152,8 @@ static int dlfb_ops_set_par(struct fb_info *info)
 	int result;
 	u16 *pix_framebuffer;
 	int i;
+	
+	printk("dlfb_ops_set_par called\n");
 
 	pr_notice("set_par mode %dx%d\n", info->var.xres, info->var.yres);
 
@@ -1178,6 +1197,8 @@ static int dlfb_ops_blank(int blank_mode, struct fb_info *info)
 	struct dlfb_data *dev = info->par;
 	char *bufptr;
 	struct urb *urb;
+	
+	printk("dlfb_ops_blank called\n");
 
 	pr_info("/dev/fb%d FB_BLANK mode %d --> %d\n",
 		info->node, dev->blank_mode, blank_mode);
