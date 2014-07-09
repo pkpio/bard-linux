@@ -155,11 +155,13 @@ static char *dlfb_set_register(char *buf, u8 reg, u8 val)
 
 static char *dlfb_vidreg_lock(char *buf)
 {
+	printk("dlfb_vidreg_lock called \n");
 	return dlfb_set_register(buf, 0xFF, 0x00);
 }
 
 static char *dlfb_vidreg_unlock(char *buf)
 {
+	printk("dlfb_vidreg_unlock called \n");
 	return dlfb_set_register(buf, 0xFF, 0xFF);
 }
 
@@ -176,6 +178,8 @@ static char *dlfb_vidreg_unlock(char *buf)
 static char *dlfb_blanking(char *buf, int fb_blank)
 {
 	u8 reg;
+	
+	printk("dlfb_blanking called \n");
 
 	switch (fb_blank) {
 	case FB_BLANK_POWERDOWN:
