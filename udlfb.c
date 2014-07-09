@@ -145,7 +145,8 @@ static void dlfb_free_urb_list(struct dlfb_data *dev);
  */
 static char *dlfb_set_register(char *buf, u8 reg, u8 val)
 {
-	printk("dlfb_set_register: buf: %c, reg: %u, val: %u\n", buf, reg, val);
+	printk("dlfb_set_register called\n");
+	//printk("dlfb_set_register: buf: %c, reg: %u, val: %u\n", buf, reg, val);
 	*buf++ = 0xAF;
 	*buf++ = 0x20;
 	*buf++ = reg;
@@ -205,11 +206,13 @@ static char *dlfb_blanking(char *buf, int fb_blank)
 
 static char *dlfb_set_color_depth(char *buf, u8 selection)
 {
+	printk("dlfb_set_color_depth called\n");
 	return dlfb_set_register(buf, 0x00, selection);
 }
 
 static char *dlfb_set_base16bpp(char *wrptr, u32 base)
 {
+	printk("dlfb_set_base16bpp called\n");
 	/* the base pointer is 16 bits wide, 0x20 is hi byte. */
 	wrptr = dlfb_set_register(wrptr, 0x20, base >> 16);
 	wrptr = dlfb_set_register(wrptr, 0x21, base >> 8);
@@ -222,6 +225,7 @@ static char *dlfb_set_base16bpp(char *wrptr, u32 base)
  */
 static char *dlfb_set_base8bpp(char *wrptr, u32 base)
 {
+	printk("dlfb_set_base8bpp called\n");
 	wrptr = dlfb_set_register(wrptr, 0x26, base >> 16);
 	wrptr = dlfb_set_register(wrptr, 0x27, base >> 8);
 	return dlfb_set_register(wrptr, 0x28, base);
@@ -229,6 +233,7 @@ static char *dlfb_set_base8bpp(char *wrptr, u32 base)
 
 static char *dlfb_set_register_16(char *wrptr, u8 reg, u16 value)
 {
+	printk("dlfb_set_register_16 called\n");
 	wrptr = dlfb_set_register(wrptr, reg, value >> 8);
 	return dlfb_set_register(wrptr, reg+1, value);
 }
@@ -239,6 +244,7 @@ static char *dlfb_set_register_16(char *wrptr, u8 reg, u16 value)
  */
 static char *dlfb_set_register_16be(char *wrptr, u8 reg, u16 value)
 {
+	printk("dlfb_set_register_16be called\n");
 	wrptr = dlfb_set_register(wrptr, reg, value);
 	return dlfb_set_register(wrptr, reg+1, value >> 8);
 }
@@ -255,6 +261,7 @@ static char *dlfb_set_register_16be(char *wrptr, u8 reg, u16 value)
 static u16 dlfb_lfsr16(u16 actual_count)
 {
 	u32 lv = 0xFFFF; /* This is the lfsr value that the hw starts with */
+	printk("dlfb_lfsr16 called\n");
 
 	while (actual_count--) {
 		lv =	 ((lv << 1) |
@@ -271,6 +278,7 @@ static u16 dlfb_lfsr16(u16 actual_count)
  */
 static char *dlfb_set_register_lfsr16(char *wrptr, u8 reg, u16 value)
 {
+	printk("dlfb_set_register_lfsr16 called\n");
 	return dlfb_set_register_16(wrptr, reg, dlfb_lfsr16(value));
 }
 
@@ -283,6 +291,8 @@ static char *dlfb_set_vid_cmds(char *wrptr, struct fb_var_screeninfo *var)
 	u16 xds, yds;
 	u16 xde, yde;
 	u16 yec;
+	
+	printk("dlfb_set_vid_cmds called\n");
 
 	/* x display start */
 	xds = var->left_margin + var->hsync_len;
@@ -345,6 +355,8 @@ static int dlfb_set_video_mode(struct dlfb_data *dev,
 	int retval = 0;
 	int writesize;
 	struct urb *urb;
+	
+	printk("dlfb_set_video_mode called\n");
 
 	if (!atomic_read(&dev->usb_active))
 		return -EPERM;
@@ -431,6 +443,8 @@ static int dlfb_trim_hline(const u8 *bback, const u8 **bfront, int *width_bytes)
 	int start = width;
 	int end = width;
 
+	printk("dlfb_trim_hline called\n");
+
 	prefetch((void *) front);
 	prefetch((void *) back);
 
@@ -493,6 +507,8 @@ static void dlfb_compress_hline(
 	uint32_t dev_addr  = *device_address_ptr;
 	uint8_t *cmd = *command_buffer_ptr;
 	const int bpp = 2;
+	
+	printk("dlfb_compress_hline called\n");
 
 	while ((pixel_end > pixel) &&
 	       (cmd_buffer_end - MIN_RLX_CMD_BYTES > cmd)) {
@@ -591,6 +607,8 @@ static int dlfb_render_hline(struct dlfb_data *dev, struct urb **urb_ptr,
 	line_start = (u8 *) (front + byte_offset);
 	next_pixel = line_start;
 	line_end = next_pixel + byte_width;
+	
+	printk("dlfb_render_hline called\n");
 
 	if (dev->backing_buffer) {
 		int offset;
@@ -645,6 +663,8 @@ int dlfb_handle_damage(struct dlfb_data *dev, int x, int y,
 	int bytes_identical = 0;
 	struct urb *urb;
 	int aligned_x;
+	
+	printk("dlfb_handle_damage called\n");
 
 	start_cycles = get_cycles();
 
@@ -720,6 +740,8 @@ static ssize_t dlfb_ops_write(struct fb_info *info, const char __user *buf,
 			  size_t count, loff_t *ppos)
 {
 	ssize_t result = -ENOSYS;
+	
+	printk("dlfb_ops_write called\n");
 
 #if defined CONFIG_FB_SYS_FOPS
 
@@ -746,6 +768,7 @@ static void dlfb_ops_copyarea(struct fb_info *info,
 				const struct fb_copyarea *area)
 {
 	printk("dlfb_ops_copyarea called\n");
+	
 #if defined CONFIG_FB_SYS_COPYAREA
 
 	struct dlfb_data *dev = info->par;
@@ -762,6 +785,7 @@ static void dlfb_ops_imageblit(struct fb_info *info,
 				const struct fb_image *image)
 {
 	printk("dlfb_ops_imageblit called\n");
+	
 #if defined CONFIG_FB_SYS_IMAGEBLIT
 
 	struct dlfb_data *dev = info->par;
@@ -779,6 +803,7 @@ static void dlfb_ops_fillrect(struct fb_info *info,
 			  const struct fb_fillrect *rect)
 {
 	printk("dlfb_ops_fillrect called\n");
+	
 #if defined CONFIG_FB_SYS_FILLRECT
 
 	struct dlfb_data *dev = info->par;
@@ -810,6 +835,8 @@ static void dlfb_dpy_deferred_io(struct fb_info *info,
 	int bytes_sent = 0;
 	int bytes_identical = 0;
 	int bytes_rendered = 0;
+	
+	printk("dlfb_dpy_deferred_io called\n");
 
 	if (!fb_defio)
 		return;
@@ -1030,6 +1057,8 @@ static int dlfb_ops_open(struct fb_info *info, int user)
 static void dlfb_free(struct kref *kref)
 {
 	struct dlfb_data *dev = container_of(kref, struct dlfb_data, kref);
+	
+	printk("dlfb_free called\n");
 
 	if (dev->backing_buffer)
 		vfree(dev->backing_buffer);
@@ -1045,6 +1074,8 @@ static void dlfb_release_urb_work(struct work_struct *work)
 {
 	struct urb_node *unode = container_of(work, struct urb_node,
 					      release_urb_work.work);
+					      
+	printk("dlfb_release_urb_work called\n");
 
 	up(&unode->dev->urbs.limit_sem);
 }
@@ -1052,6 +1083,8 @@ static void dlfb_release_urb_work(struct work_struct *work)
 static void dlfb_free_framebuffer(struct dlfb_data *dev)
 {
 	struct fb_info *info = dev->info;
+	
+	printk("dlfb_free_framebuffer called\n");
 
 	if (info) {
 		int node = info->node;
@@ -1083,6 +1116,9 @@ static void dlfb_free_framebuffer_work(struct work_struct *work)
 {
 	struct dlfb_data *dev = container_of(work, struct dlfb_data,
 					     free_framebuffer_work.work);
+					     
+	printk("dlfb_free_framebuffer_work called\n");
+	
 	dlfb_free_framebuffer(dev);
 }
 /*
@@ -1125,6 +1161,8 @@ static int dlfb_is_valid_mode(struct fb_videomode *mode,
 		struct fb_info *info)
 {
 	struct dlfb_data *dev = info->par;
+	
+	printk("dlfb_is_valid_mode called\n");
 
 	if (mode->xres * mode->yres > dev->sku_pixel_limit) {
 		pr_warn("%dx%d beyond chip capabilities\n",
@@ -1143,6 +1181,8 @@ static void dlfb_var_color_format(struct fb_var_screeninfo *var)
 	const struct fb_bitfield red = { 11, 5, 0 };
 	const struct fb_bitfield green = { 5, 6, 0 };
 	const struct fb_bitfield blue = { 0, 5, 0 };
+	
+	printk("dlfb_var_color_format called\n");
 
 	var->bits_per_pixel = 16;
 	var->red = red;
@@ -1203,6 +1243,9 @@ static int dlfb_ops_set_par(struct fb_info *info)
 /* To fonzi the jukebox (e.g. make blanking changes take effect) */
 static char *dlfb_dummy_render(char *buf)
 {
+	
+	printk("dlfb_dummy_render called\n");	
+	
 	*buf++ = 0xAF;
 	*buf++ = 0x6A; /* copy */
 	*buf++ = 0x00; /* from address*/
@@ -1286,6 +1329,8 @@ static int dlfb_realloc_framebuffer(struct dlfb_data *dev, struct fb_info *info)
 	unsigned char *old_fb = info->screen_base;
 	unsigned char *new_fb;
 	unsigned char *new_back = 0;
+	
+	printk("dlfb_realloc_framebuffer called\n");
 
 	pr_warn("Reallocating framebuffer. Addresses will change!\n");
 
@@ -1370,6 +1415,8 @@ static int dlfb_setup_modes(struct dlfb_data *dev,
 	int result = 0;
 	char *edid = NULL;
 	int tries = 3;
+	
+	printk("dlfb_setup_modes called\n");
 
 	if (info->dev) /* only use mutex if info has been registered */
 		mutex_lock(&info->lock);
