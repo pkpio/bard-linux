@@ -145,6 +145,7 @@ static void dlfb_free_urb_list(struct dlfb_data *dev);
  */
 static char *dlfb_set_register(char *buf, u8 reg, u8 val)
 {
+	printk("dlfb_set_register: buf: %c, reg: %u, val: %u\n", buf, reg, val);
 	*buf++ = 0xAF;
 	*buf++ = 0x20;
 	*buf++ = reg;
@@ -2123,6 +2124,8 @@ static int dlfb_submit_urb(struct dlfb_data *dev, struct urb *urb, size_t len)
 {
 	int ret;
 
+	printk("dlfb_submit_urb called\n");	
+	
 	BUG_ON(len > dev->urbs.size);
 
 	urb->transfer_buffer_length = len; /* set to actual payload len */
