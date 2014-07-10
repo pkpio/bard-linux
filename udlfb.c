@@ -1565,6 +1565,9 @@ static ssize_t metrics_bytes_rendered_show(struct device *fbdev,
 				   struct device_attribute *a, char *buf) {
 	struct fb_info *fb_info = dev_get_drvdata(fbdev);
 	struct dlfb_data *dev = fb_info->par;
+	
+	printk("metrics_bytes_rendered_show called\n");
+	
 	return snprintf(buf, PAGE_SIZE, "%u\n",
 			atomic_read(&dev->bytes_rendered));
 }
@@ -1573,6 +1576,9 @@ static ssize_t metrics_bytes_identical_show(struct device *fbdev,
 				   struct device_attribute *a, char *buf) {
 	struct fb_info *fb_info = dev_get_drvdata(fbdev);
 	struct dlfb_data *dev = fb_info->par;
+	
+	printk("metrics_bytes_identical_show called\n");
+	
 	return snprintf(buf, PAGE_SIZE, "%u\n",
 			atomic_read(&dev->bytes_identical));
 }
@@ -1581,6 +1587,9 @@ static ssize_t metrics_bytes_sent_show(struct device *fbdev,
 				   struct device_attribute *a, char *buf) {
 	struct fb_info *fb_info = dev_get_drvdata(fbdev);
 	struct dlfb_data *dev = fb_info->par;
+	
+	printk("metrics_bytes_sent_show called\n");
+	
 	return snprintf(buf, PAGE_SIZE, "%u\n",
 			atomic_read(&dev->bytes_sent));
 }
@@ -1589,6 +1598,9 @@ static ssize_t metrics_cpu_kcycles_used_show(struct device *fbdev,
 				   struct device_attribute *a, char *buf) {
 	struct fb_info *fb_info = dev_get_drvdata(fbdev);
 	struct dlfb_data *dev = fb_info->par;
+	
+	printk("metrics_cpu_kcycles_used_show called\n");
+	
 	return snprintf(buf, PAGE_SIZE, "%u\n",
 			atomic_read(&dev->cpu_kcycles_used));
 }
@@ -1596,6 +1608,9 @@ static ssize_t metrics_cpu_kcycles_used_show(struct device *fbdev,
 static ssize_t monitor_show(struct device *fbdev,
 				   struct device_attribute *a, char *buf) {
 	struct fb_info *fb_info = dev_get_drvdata(fbdev);
+	
+	printk("monitor_show called\n");
+	
 	return snprintf(buf, PAGE_SIZE, "%s-%s\n",
 			fb_info->monspecs.monitor,
 			fb_info->monspecs.serial_no);
@@ -1610,6 +1625,8 @@ static ssize_t edid_show(
 	struct device *fbdev = container_of(kobj, struct device, kobj);
 	struct fb_info *fb_info = dev_get_drvdata(fbdev);
 	struct dlfb_data *dev = fb_info->par;
+	
+	printk("edid_show called\n");
 
 	if (dev->edid == NULL)
 		return 0;
@@ -1637,6 +1654,8 @@ static ssize_t edid_store(
 	struct device *fbdev = container_of(kobj, struct device, kobj);
 	struct fb_info *fb_info = dev_get_drvdata(fbdev);
 	struct dlfb_data *dev = fb_info->par;
+	
+	printk("edid_store called\n");
 
 	/* We only support write of entire EDID at once, no offset*/
 	if ((src_size != EDID_LENGTH) || (src_off != 0))
@@ -1658,6 +1677,8 @@ static ssize_t metrics_reset_store(struct device *fbdev,
 {
 	struct fb_info *fb_info = dev_get_drvdata(fbdev);
 	struct dlfb_data *dev = fb_info->par;
+	
+	printk("metrics_reset_store called\n");
 
 	atomic_set(&dev->bytes_rendered, 0);
 	atomic_set(&dev->bytes_identical, 0);
@@ -1695,6 +1716,8 @@ static int dlfb_select_std_channel(struct dlfb_data *dev)
 				0x60, 0xFE, 0xC6, 0x97,
 				0x16, 0x3D, 0x47, 0xF2  };
 
+	prinkt("dlfb_select_std_channel called\n");
+
 	ret = usb_control_msg(dev->udev, usb_sndctrlpipe(dev->udev, 0),
 			NR_USB_REQUEST_CHANNEL,
 			(USB_DIR_OUT | USB_TYPE_VENDOR), 0, 0,
@@ -1710,6 +1733,8 @@ static int dlfb_parse_vendor_descriptor(struct dlfb_data *dev,
 	char *desc_end;
 
 	int total_len = 0;
+	
+	printk("dlfb_parse_vendor_descriptor called\n");
 
 	buf = kzalloc(MAX_VENDOR_DESCRIPTOR_SIZE, GFP_KERNEL);
 	if (!buf)
@@ -1791,6 +1816,8 @@ static int dlfb_usb_probe(struct usb_interface *interface,
 	struct dlfb_data *dev = 0;
 	int retval = -ENOMEM;
 
+	printk("dlfb_usb_probe called\n");
+
 	/* usb initialization */
 
 	usbdev = interface_to_usbdev(interface);
@@ -1868,6 +1895,8 @@ static void dlfb_init_framebuffer_work(struct work_struct *work)
 	int retval;
 	int i;
 
+	printk("dlfb_init_framebuffer_work called\n");
+
 	/* allocates framebuffer driver structure, not framebuffer memory */
 	info = framebuffer_alloc(0, dev->gdev);
 	if (!info) {
@@ -1940,6 +1969,8 @@ static void dlfb_usb_disconnect(struct usb_interface *interface)
 	struct dlfb_data *dev;
 	struct fb_info *info;
 	int i;
+	
+	printk("dlfb_usb_disconnect called\n");
 
 	dev = usb_get_intfdata(interface);
 	info = dev->info;
@@ -2004,6 +2035,9 @@ static int __init dlfb_module_init(void)
 
 static void __exit dlfb_module_exit(void)
 {
+
+	printk("dlfb_module_exit called\n");
+	
 	usb_deregister(&dlfb_driver);
 }
 
@@ -2015,6 +2049,8 @@ static void dlfb_urb_completion(struct urb *urb)
 	struct urb_node *unode = urb->context;
 	struct dlfb_data *dev = unode->dev;
 	unsigned long flags;
+
+	printk("dlfb_urb_completion called\n");
 
 	/* sync/async unlink faults aren't errors */
 	if (urb->status) {
@@ -2052,6 +2088,8 @@ static void dlfb_free_urb_list(struct dlfb_data *dev)
 	struct urb *urb;
 	int ret;
 	unsigned long flags;
+	
+	printk("dlfb_free_urb_list called\n");
 
 	pr_notice("Freeing all render urbs\n");
 
@@ -2089,6 +2127,8 @@ static int dlfb_alloc_urb_list(struct dlfb_data *dev, int count, size_t size)
 	struct urb *urb;
 	struct urb_node *unode;
 	char *buf;
+	
+	printk("dlfb_alloc_urb_list called\n");
 
 	spin_lock_init(&dev->urbs.lock);
 
@@ -2145,6 +2185,8 @@ static struct urb *dlfb_get_urb(struct dlfb_data *dev)
 	struct urb_node *unode;
 	struct urb *urb = NULL;
 	unsigned long flags;
+	
+	printk("dlfb_get_urb called\n");
 
 	/* Wait for an in-flight buffer to complete and get re-queued */
 	ret = down_timeout(&dev->urbs.limit_sem, GET_URB_TIMEOUT);
