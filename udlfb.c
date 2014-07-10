@@ -1716,7 +1716,7 @@ static int dlfb_select_std_channel(struct dlfb_data *dev)
 				0x60, 0xFE, 0xC6, 0x97,
 				0x16, 0x3D, 0x47, 0xF2  };
 
-	prinkt("dlfb_select_std_channel called\n");
+	printk("dlfb_select_std_channel called\n");
 
 	ret = usb_control_msg(dev->udev, usb_sndctrlpipe(dev->udev, 0),
 			NR_USB_REQUEST_CHANNEL,
