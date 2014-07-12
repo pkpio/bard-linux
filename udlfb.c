@@ -147,8 +147,8 @@ static char *dlfb_set_register(char *buf, u8 reg, u8 val)
 {
 	printk("dlfb_set_register called\n");
 	//printk("dlfb_set_register: buf: %c, reg: %u, val: %u\n", buf, reg, val);
-	*buf++ = 0xAF;
-	*buf++ = 0x20;
+	//*buf++ = 0xAF;
+	//*buf++ = 0x20;
 	*buf++ = reg;
 	*buf++ = val;
 	return buf;
@@ -615,8 +615,10 @@ static int dlfb_render_hline(struct dlfb_data *dev, struct urb **urb_ptr,
 		const u8 *back_start = (u8 *) (dev->backing_buffer
 						+ byte_offset);
 
-		*ident_ptr += dlfb_trim_hline(back_start, &next_pixel,
+		
+		ident_ptr += dlfb_trim_hline(back_start, &next_pixel,
 			&byte_width);
+		
 
 		offset = next_pixel - line_start;
 		line_end = next_pixel + byte_width;
@@ -630,9 +632,11 @@ static int dlfb_render_hline(struct dlfb_data *dev, struct urb **urb_ptr,
 
 	while (next_pixel < line_end) {
 
+		
 		dlfb_compress_hline((const uint16_t **) &next_pixel,
 			     (const uint16_t *) line_end, &dev_addr,
 			(u8 **) &cmd, (u8 *) cmd_end);
+		
 
 		if (cmd >= cmd_end) {
 			int len = cmd - (u8 *) urb->transfer_buffer;
@@ -701,6 +705,7 @@ int dlfb_handle_damage(struct dlfb_data *dev, int x, int y,
 		int len = cmd - (char *) urb->transfer_buffer;
 		ret = dlfb_submit_urb(dev, urb, len);
 		bytes_sent += len;
+		printk("Bytes sent: %d\n", bytes_sent);
 	} else
 		dlfb_urb_completion(urb);
 
