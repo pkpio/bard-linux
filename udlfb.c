@@ -616,9 +616,10 @@ static int dlfb_render_hline(struct dlfb_data *dev, struct urb **urb_ptr,
 						+ byte_offset);
 
 		
-		ident_ptr += dlfb_trim_hline(back_start, &next_pixel,
+		/*
+		* ident_ptr += dlfb_trim_hline(back_start, &next_pixel,
 			&byte_width);
-		
+		*/
 
 		offset = next_pixel - line_start;
 		line_end = next_pixel + byte_width;
@@ -632,11 +633,11 @@ static int dlfb_render_hline(struct dlfb_data *dev, struct urb **urb_ptr,
 
 	while (next_pixel < line_end) {
 
-		
+		/*
 		dlfb_compress_hline((const uint16_t **) &next_pixel,
 			     (const uint16_t *) line_end, &dev_addr,
 			(u8 **) &cmd, (u8 *) cmd_end);
-		
+		*/
 
 		if (cmd >= cmd_end) {
 			int len = cmd - (u8 *) urb->transfer_buffer;
