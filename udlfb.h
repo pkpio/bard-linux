@@ -10,6 +10,12 @@
  */
 #define DLFB_IOCTL_RETURN_EDID	 0xAD
 #define DLFB_IOCTL_REPORT_DAMAGE 0xAA
+
+/* VM_RESERVED is removed from kernel >3.7 */
+#ifndef VM_RESERVED
+#define VM_RESERVED (VM_DONTEXPAND | VM_DONTDUMP)
+#endif
+
 struct dloarea {
 	int x, y;
 	int w, h;
