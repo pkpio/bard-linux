@@ -422,7 +422,7 @@ static int dlfb_ops_mmap(struct fb_info *info, struct vm_area_struct *vma)
 			size = 0;
 	}
 
-	//vma->vm_flags |= VM_RESERVED;	/* avoid to swap out this VMA */
+	vma->vm_flags |= VM_RESERVED;	/* avoid to swap out this VMA */
 	return 0;
 }
 
@@ -617,9 +617,11 @@ static int dlfb_render_hline(struct dlfb_data *dev, struct urb **urb_ptr,
 
 		
 		/*
-		* ident_ptr += dlfb_trim_hline(back_start, &next_pixel,
+		ident_ptr += dlfb_trim_hline(back_start, &next_pixel,
 			&byte_width);
 		*/
+		prefetch((void *) (const unsigned long *) * (&next_pixel));
+		prefetch((void *) (const unsigned long *) back_start);
 
 		offset = next_pixel - line_start;
 		line_end = next_pixel + byte_width;
