@@ -1,0 +1,24 @@
+After starting xserver,
+
+Bytes sent = 81041
+Bytes rendered = 3829760
+Bytes identical = 0
+CPU Kcycles used = 43148
+mode = null
+cursor = null
+name = udlfb
+monitor = SSDM-HS53-1253706
+stride = 2048
+virtual_size = 1024, 768
+bit per pixel = 16
+pan = 0,0
+rotate = 0;
+state = 0;
+
+
+modes:
+V:800x600p-60
+V:640x480p-60
+U:720x400p-70
+D:1024x768p-60
+
