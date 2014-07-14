@@ -39,10 +39,10 @@
 #define SC1	0xff	//Subclass
 #define PR1	0x00	//Protocol
 
-/* Function added by me to fix make errors */
-static void err(char *msg){
+/* Function added by me to fix make errors /
+static void err (char *msg){
 	printk(msg);
-}
+}*/
 
 unsigned char sony_sdmhs53_edid[] = {0x00, 0xff, 0xff,0xff,
 					0xff,0xff,0xff,0x00,0x4d,0xd9,0x50,0x22,
@@ -616,10 +616,10 @@ static int dlfb_render_hline(struct dlfb_data *dev, struct urb **urb_ptr,
 						+ byte_offset);
 
 		
-		/*
+		
 		ident_ptr += dlfb_trim_hline(back_start, &next_pixel,
 			&byte_width);
-		*/
+		
 		prefetch((void *) (const unsigned long *) * (&next_pixel));
 		prefetch((void *) (const unsigned long *) back_start);
 
@@ -635,11 +635,11 @@ static int dlfb_render_hline(struct dlfb_data *dev, struct urb **urb_ptr,
 
 	while (next_pixel < line_end) {
 
-		/*
+		
 		dlfb_compress_hline((const uint16_t **) &next_pixel,
 			     (const uint16_t *) line_end, &dev_addr,
 			(u8 **) &cmd, (u8 *) cmd_end);
-		*/
+		
 
 		if (cmd >= cmd_end) {
 			int len = cmd - (u8 *) urb->transfer_buffer;
