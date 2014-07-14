@@ -519,11 +519,13 @@ static void dlfb_compress_hline(
 
 		prefetchw((void *) cmd); /* pull in one cache line at least */
 
+		/*
 		*cmd++ = 0xAF;
 		*cmd++ = 0x6B;
 		*cmd++ = (uint8_t) ((dev_addr >> 16) & 0xFF);
 		*cmd++ = (uint8_t) ((dev_addr >> 8) & 0xFF);
 		*cmd++ = (uint8_t) ((dev_addr) & 0xFF);
+		*/
 
 		cmd_pixels_count_byte = cmd++; /*  we'll know this later */
 		cmd_pixel_start = pixel;
@@ -534,7 +536,7 @@ static void dlfb_compress_hline(
 		cmd_pixel_end = pixel + min(MAX_CMD_PIXELS + 1,
 			min((int)(pixel_end - pixel),
 			    (int)(cmd_buffer_end - cmd) / bpp));
-
+		
 		prefetch_range((void *) pixel, (cmd_pixel_end - pixel) * bpp);
 
 		while (pixel < cmd_pixel_end) {
@@ -616,12 +618,14 @@ static int dlfb_render_hline(struct dlfb_data *dev, struct urb **urb_ptr,
 						+ byte_offset);
 
 		
-		/*
+		
+		
 		ident_ptr += dlfb_trim_hline(back_start, &next_pixel,
 			&byte_width);
-		*/
-		prefetch((void *) (const unsigned long *) * (&next_pixel));
-		prefetch((void *) (const unsigned long *) back_start);
+
+		
+		//prefetch((void *) (const unsigned long *) * (&next_pixel));
+		//prefetch((void *) (const unsigned long *) back_start);
 
 		offset = next_pixel - line_start;
 		line_end = next_pixel + byte_width;
@@ -635,11 +639,10 @@ static int dlfb_render_hline(struct dlfb_data *dev, struct urb **urb_ptr,
 
 	while (next_pixel < line_end) {
 
-		/*
+		
 		dlfb_compress_hline((const uint16_t **) &next_pixel,
 			     (const uint16_t *) line_end, &dev_addr,
 			(u8 **) &cmd, (u8 *) cmd_end);
-		*/
 
 		if (cmd >= cmd_end) {
 			int len = cmd - (u8 *) urb->transfer_buffer;
