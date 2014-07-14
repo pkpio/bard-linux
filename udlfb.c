@@ -39,11 +39,6 @@
 #define SC1	0xff	//Subclass
 #define PR1	0x00	//Protocol
 
-/* Function added by me to fix make errors */
-static void err(char *msg){
-	printk(msg);
-}
-
 unsigned char sony_sdmhs53_edid[] = {0x00, 0xff, 0xff,0xff,
 					0xff,0xff,0xff,0x00,0x4d,0xd9,0x50,0x22,
 					0x01,0x01,0x01,0x01,0x0b,0x0e,0x01,0x03,
@@ -138,6 +133,12 @@ static struct urb *dlfb_get_urb(struct dlfb_data *dev);
 static int dlfb_submit_urb(struct dlfb_data *dev, struct urb * urb, size_t len);
 static int dlfb_alloc_urb_list(struct dlfb_data *dev, int count, size_t size);
 static void dlfb_free_urb_list(struct dlfb_data *dev);
+
+
+/* Function added by me to fix make errors */
+static void err (char *msg){
+	printk(msg);
+}
 
 /*
  * All DisplayLink bulk operations start with 0xAF, followed by specific code
@@ -617,8 +618,6 @@ static int dlfb_render_hline(struct dlfb_data *dev, struct urb **urb_ptr,
 		const u8 *back_start = (u8 *) (dev->backing_buffer
 						+ byte_offset);
 
-		
-		
 		
 		ident_ptr += dlfb_trim_hline(back_start, &next_pixel,
 			&byte_width);
