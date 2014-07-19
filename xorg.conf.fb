@@ -1,0 +1,5 @@
+Section "Device"  
+  Identifier "devfb"
+  Driver "fbdev"
+  Option "fbdev" "/dev/fb1"
+EndSection
