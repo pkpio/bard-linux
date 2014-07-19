@@ -449,6 +449,8 @@ static int dlfb_trim_hline(const u8 *bback, const u8 **bfront, int *width_bytes)
 	prefetch((void *) front);
 	prefetch((void *) back);
 
+	
+	/*	
 	for (j = 0; j < width; j++) {
 		if (back[j] != front[j]) {
 			start = j;
@@ -462,6 +464,8 @@ static int dlfb_trim_hline(const u8 *bback, const u8 **bfront, int *width_bytes)
 			break;
 		}
 	}
+	*/
+
 
 	identical = start + (width - end);
 	*bfront = (u8 *) &front[start];
@@ -520,12 +524,12 @@ static void dlfb_compress_hline(
 
 		prefetchw((void *) cmd); /* pull in one cache line at least */
 
-		/*
-		*cmd++ = 0xAF;
-		*cmd++ = 0x6B;
-		*cmd++ = (uint8_t) ((dev_addr >> 16) & 0xFF);
-		*cmd++ = (uint8_t) ((dev_addr >> 8) & 0xFF);
-		*cmd++ = (uint8_t) ((dev_addr) & 0xFF);
+		
+		/*cmd++ = 0xAF;
+		cmd++ = 0x6B;
+		cmd++ = (uint8_t) ((dev_addr >> 16) & 0xFF);
+		cmd++ = (uint8_t) ((dev_addr >> 8) & 0xFF);
+		cmd++ = (uint8_t) ((dev_addr) & 0xFF);
 		*/
 
 		cmd_pixels_count_byte = cmd++; /*  we'll know this later */
