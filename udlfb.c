@@ -450,6 +450,9 @@ static int dlfb_trim_hline(const u8 *bback, const u8 **bfront, int *width_bytes)
 	prefetch((void *) back);
 
 	
+	// Edited
+	start = 0;
+	end = width;	
 	/*	
 	for (j = 0; j < width; j++) {
 		if (back[j] != front[j]) {
