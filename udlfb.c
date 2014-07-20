@@ -628,9 +628,12 @@ static int dlfb_render_hline(struct dlfb_data *dev, struct urb **urb_ptr,
 	// identical pixels value to zero.
 	ident_ptr += 0;
 	
+	
+	printk("hline len is: %d\n", cmd - (u8 *) urb->transfer_buffer);
 	// Send the current data in dev.
-	while (cmd >= cmd_end) {
+	while (cmd <= cmd_end) {
 		int len = cmd - (u8 *) urb->transfer_buffer;
+		printk("hline length is: %d\n", len);
 		if (dlfb_submit_urb(dev, urb, len))
 			return 1; /* lost pixels is set */
 		*sent_ptr += len;
