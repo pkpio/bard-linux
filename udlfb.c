@@ -615,6 +615,8 @@ static int dlfb_render_hline(struct dlfb_data *dev, struct urb **urb_ptr,
 	struct urb *urb = *urb_ptr;
 	u8 *cmd = *urb_buf_ptr;
 	u8 *cmd_end = (u8 *) urb->transfer_buffer + urb->transfer_buffer_length;
+	
+	int transferred = 0;
 
 	line_start = (u8 *) (front + byte_offset);
 	next_pixel = line_start;
@@ -638,7 +640,14 @@ static int dlfb_render_hline(struct dlfb_data *dev, struct urb **urb_ptr,
 	// identical pixels value to zero.
 	ident_ptr += 0;
 	
+	// A line is 2048 bytes. Our Bulk out size is 16K so, it can accomodate
+	// a line.
+	retval = usb_bulk_msg(dev->udev,
+		      usb_sndbulkpipe(dev->udev, dev->bulk_out_add),
+		      line_start, byte_width, &transferred, HZ*5);
 	
+	
+	/*
 	printk("hline len is: %d\n", line_start - line_start);
 	// Send the current data in dev.
 	while (cmd >= cmd_end) {
@@ -646,14 +655,14 @@ static int dlfb_render_hline(struct dlfb_data *dev, struct urb **urb_ptr,
 		printk("hline length is: %d\n", len);
 		if (dlfb_submit_urb(dev, urb, len))
 			return 1; /* lost pixels is set */
-		*sent_ptr += len;
-		urb = dlfb_get_urb(dev);
-		if (!urb)
-			return 1; /* lost_pixels is set */
-		*urb_ptr = urb;
-		cmd = urb->transfer_buffer;
-		cmd_end = &cmd[urb->transfer_buffer_length];
-	}
+	//	*sent_ptr += len;
+	//	urb = dlfb_get_urb(dev);
+	//	if (!urb)
+	//		return 1; /* lost_pixels is set */
+	//	*urb_ptr = urb;
+	//	cmd = urb->transfer_buffer;
+	//	cmd_end = &cmd[urb->transfer_buffer_length];
+	//}
 	
 	
 	// -TODO- Set sent_ptr value too
@@ -704,7 +713,7 @@ static int dlfb_render_hline(struct dlfb_data *dev, struct urb **urb_ptr,
 	//}
 	
 
-	*urb_buf_ptr = cmd;
+	//*urb_buf_ptr = cmd;
 
 	return 0;
 }
@@ -2216,6 +2225,7 @@ static int dlfb_alloc_urb_list(struct dlfb_data *dev, int count, size_t size)
 			break;
 		}
 
+		// -TODO- Remove hardcoded bulkout address
 		/* urb->transfer_buffer_length set to actual before submit */
 		usb_fill_bulk_urb(urb, dev->udev, usb_sndbulkpipe(dev->udev, 0x04),
 			buf, size, dlfb_urb_completion, unode);
