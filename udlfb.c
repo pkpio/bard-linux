@@ -39,6 +39,9 @@
 #define SC1	0xff	//Subclass
 #define PR1	0x00	//Protocol
 
+// A temp var just to see how many times hline_render is being called.
+int vline_count = 0;
+
 unsigned char sony_sdmhs53_edid[] = {0x00, 0xff, 0xff,0xff,
 					0xff,0xff,0xff,0x00,0x4d,0xd9,0x50,0x22,
 					0x01,0x01,0x01,0x01,0x0b,0x0e,0x01,0x03,
@@ -623,6 +626,8 @@ static int dlfb_render_hline(struct dlfb_data *dev, struct urb **urb_ptr,
 	next_pixel = line_start;
 	line_end = next_pixel + byte_width;
 	
+	vline_count++;
+	
 	// Debugging
 	printk("render_hline dev: %02x\n", &dev);
 	printk("render_hline urb_ptr: %02x\n", &urb_ptr);
@@ -646,10 +651,11 @@ static int dlfb_render_hline(struct dlfb_data *dev, struct urb **urb_ptr,
 	// -TODO- Remove hardcoded bulk-out address
 	retval = usb_bulk_msg(dev->udev,
 		      usb_sndbulkpipe(dev->udev, 0x04),
-		      line_start, byte_width, &transferred, HZ*5);
+		      line_start, byte_width, &transferred, HZ*1);
 		      
 	printk("hline retval:%d\n", retval);
 	printk("hline transferred:%d\n", transferred);
+	printk("hline vertical count:%d\n", vline_count);
 	
 	
 	/*
