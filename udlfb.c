@@ -620,6 +620,16 @@ static int dlfb_render_hline(struct dlfb_data *dev, struct urb **urb_ptr,
 	next_pixel = line_start;
 	line_end = next_pixel + byte_width;
 	
+	// Debugging
+	printk("render_hline dev: %02x\n", &dev);
+	printk("render_hline urb_ptr: %02x\n", &urb_ptr);
+	printk("render_hline front: %02x\n", &front);
+	printk("render_hline urb_buf_ptr: %02x\n", &urb_buf_ptr);
+	printk("render_hline byte_offset: %n\n", byte_offset);
+	printk("render_hline byte_width: %n\n", byte_width);
+	printk("render_hline ident_ptr: %02x\n", &ident_ptr);
+	printk("render_hline sent_ptr: %02x\n", &sent_ptr);
+	
 	printk("dlfb_render_hline called\n");
 
 	
@@ -629,7 +639,7 @@ static int dlfb_render_hline(struct dlfb_data *dev, struct urb **urb_ptr,
 	ident_ptr += 0;
 	
 	
-	printk("hline len is: %d\n", cmd - (u8 *) urb->transfer_buffer);
+	printk("hline len is: %d\n", line_start - line_start);
 	// Send the current data in dev.
 	while (cmd >= cmd_end) {
 		int len = cmd - (u8 *) urb->transfer_buffer;
