@@ -651,7 +651,7 @@ static int dlfb_render_hline(struct dlfb_data *dev, struct urb **urb_ptr,
 	// -TODO- Remove hardcoded bulk-out address
 	retval = usb_bulk_msg(dev->udev,
 		      usb_sndbulkpipe(dev->udev, 0x04),
-		      line_start, byte_width, &transferred, HZ*1);
+		      line_start, byte_width, &transferred, HZ*5);
 		      
 	printk("hline retval:%d\n", retval);
 	printk("hline transferred:%d\n", transferred);
