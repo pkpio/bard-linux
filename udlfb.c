@@ -554,6 +554,8 @@ static void dlfb_compress_hline(
 			cmd += 2;
 			pixel++;
 
+			
+			/* This could be it. What we need to take out!*/
 			if (unlikely((pixel < cmd_pixel_end) &&
 				     (*pixel == *repeating_pixel))) {
 				/* go back and fill in raw pixel count */
