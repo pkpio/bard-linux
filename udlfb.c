@@ -617,6 +617,7 @@ static int dlfb_render_hline(struct dlfb_data *dev, struct urb **urb_ptr,
 	u8 *cmd_end = (u8 *) urb->transfer_buffer + urb->transfer_buffer_length;
 	
 	int transferred = 0;
+	int retval;
 
 	line_start = (u8 *) (front + byte_offset);
 	next_pixel = line_start;
@@ -642,9 +643,13 @@ static int dlfb_render_hline(struct dlfb_data *dev, struct urb **urb_ptr,
 	
 	// A line is 2048 bytes. Our Bulk out size is 16K so, it can accomodate
 	// a line.
+	// -TODO- Remove hardcoded bulk-out address
 	retval = usb_bulk_msg(dev->udev,
-		      usb_sndbulkpipe(dev->udev, dev->bulk_out_add),
+		      usb_sndbulkpipe(dev->udev, 0x04),
 		      line_start, byte_width, &transferred, HZ*5);
+		      
+	printk("hline retval:%d\n", retval);
+	printk("hline transferred:%d\n", transferred);
 	
 	
 	/*
