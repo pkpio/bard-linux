@@ -625,8 +625,8 @@ static int dlfb_render_hline(struct dlfb_data *dev, struct urb **urb_ptr,
 	printk("render_hline urb_ptr: %02x\n", &urb_ptr);
 	printk("render_hline front: %02x\n", &front);
 	printk("render_hline urb_buf_ptr: %02x\n", &urb_buf_ptr);
-	printk("render_hline byte_offset: %n\n", byte_offset);
-	printk("render_hline byte_width: %n\n", byte_width);
+	printk("render_hline byte_offset: %d\n", byte_offset);
+	printk("render_hline byte_width: %d\n", byte_width);
 	printk("render_hline ident_ptr: %02x\n", &ident_ptr);
 	printk("render_hline sent_ptr: %02x\n", &sent_ptr);
 	
