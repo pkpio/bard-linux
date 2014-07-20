@@ -622,6 +622,30 @@ static int dlfb_render_hline(struct dlfb_data *dev, struct urb **urb_ptr,
 	
 	printk("dlfb_render_hline called\n");
 
+	
+	// Some testing to send raw data.
+	
+	// identical pixels value to zero.
+	ident_ptr += 0;
+	
+	// Send the current data in dev.
+	while (cmd >= cmd_end) {
+		int len = cmd - (u8 *) urb->transfer_buffer;
+		if (dlfb_submit_urb(dev, urb, len))
+			return 1; /* lost pixels is set */
+		*sent_ptr += len;
+		urb = dlfb_get_urb(dev);
+		if (!urb)
+			return 1; /* lost_pixels is set */
+		*urb_ptr = urb;
+		cmd = urb->transfer_buffer;
+		cmd_end = &cmd[urb->transfer_buffer_length];
+	}
+	
+	
+	// -TODO- Set sent_ptr value too
+	
+	/*
 	if (dev->backing_buffer) {
 		int offset;
 		const u8 *back_start = (u8 *) (dev->backing_buffer
@@ -656,15 +680,16 @@ static int dlfb_render_hline(struct dlfb_data *dev, struct urb **urb_ptr,
 			int len = cmd - (u8 *) urb->transfer_buffer;
 			if (dlfb_submit_urb(dev, urb, len))
 				return 1; /* lost pixels is set */
-			*sent_ptr += len;
-			urb = dlfb_get_urb(dev);
-			if (!urb)
-				return 1; /* lost_pixels is set */
-			*urb_ptr = urb;
-			cmd = urb->transfer_buffer;
-			cmd_end = &cmd[urb->transfer_buffer_length];
-		}
-	}
+	//		*sent_ptr += len;
+	//		urb = dlfb_get_urb(dev);
+	//		if (!urb)
+	//			return 1; /* lost_pixels is set */
+	//		*urb_ptr = urb;
+	//		cmd = urb->transfer_buffer;
+	//		cmd_end = &cmd[urb->transfer_buffer_length];
+	//	}
+	//}
+	
 
 	*urb_buf_ptr = cmd;
 
