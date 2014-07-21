@@ -653,6 +653,8 @@ static int dlfb_render_hline(struct dlfb_data *dev, struct urb **urb_ptr,
 		      usb_sndbulkpipe(dev->udev, 0x04),
 		      line_start, byte_width, &transferred, HZ*5);
 		      
+	sent_ptr = transferred;
+		      
 	printk("hline retval:%d\n", retval);
 	printk("hline transferred:%d\n", transferred);
 	printk("hline vertical count:%d\n", vline_count);
@@ -741,6 +743,8 @@ int dlfb_handle_damage(struct dlfb_data *dev, int x, int y,
 	int aligned_x;
 	
 	printk("dlfb_handle_damage called\n");
+	
+	printk("handle damage x: %d, y:%d, width:%d, height:%d\n", x, y, width, height);
 
 	start_cycles = get_cycles();
 
@@ -900,6 +904,8 @@ static void dlfb_ops_fillrect(struct fb_info *info,
  *   in fb_defio will cause a deadlock, when it also tries to
  *   grab the same mutex.
  */
+ 
+ /* -TODO- ADD PRINTKs here */
 static void dlfb_dpy_deferred_io(struct fb_info *info,
 				struct list_head *pagelist)
 {
@@ -1338,6 +1344,8 @@ static char *dlfb_dummy_render(char *buf)
 /*
  * In order to come back from full DPMS off, we need to set the mode again
  */
+ 
+ /* -TODO- CHECK HERE -TODO- */
 static int dlfb_ops_blank(int blank_mode, struct fb_info *info)
 {
 	struct dlfb_data *dev = info->par;
