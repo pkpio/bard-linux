@@ -919,6 +919,14 @@ static void dlfb_dpy_deferred_io(struct fb_info *info,
 	int bytes_identical = 0;
 	int bytes_rendered = 0;
 	
+	// Added for a different transfer
+	// -TODO- If these were to stay, check how they change for minimal data costs 
+	int i;
+	int x = 0;
+	int y = 0;
+	int width = 1024;
+	int height = 768;
+	
 	printk("dlfb_dpy_deferred_io called\n");
 
 	if (!fb_defio)
@@ -934,8 +942,21 @@ static void dlfb_dpy_deferred_io(struct fb_info *info,
 		return;
 
 	cmd = urb->transfer_buffer;
+	
+	// Adding the code to send whole frame from damage_handle
+	for (i = y; i < y + height ; i++) {
+		const int line_offset = dev->info->fix.line_length * i;
+		const int byte_offset = line_offset + (x * BPP);
+
+		if (dlfb_render_hline(dev, &urb,
+				      (char *) dev->info->fix.smem_start,
+				      &cmd, byte_offset, width * BPP,
+				      &bytes_identical, &bytes_sent))
+			goto error;
+	}
 
 	/* walk the written page list and render each to device */
+	/*
 	list_for_each_entry(cur, &fbdefio->pagelist, lru) {
 
 		if (dlfb_render_hline(dev, &urb, (char *) info->fix.smem_start,
@@ -944,6 +965,7 @@ static void dlfb_dpy_deferred_io(struct fb_info *info,
 			goto error;
 		bytes_rendered += PAGE_SIZE;
 	}
+	*/
 
 	if (cmd > (char *) urb->transfer_buffer) {
 		/* Send partial buffer remaining before exiting */
