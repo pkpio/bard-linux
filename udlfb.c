@@ -909,6 +909,12 @@ static void dlfb_ops_fillrect(struct fb_info *info,
 static void dlfb_dpy_deferred_io(struct fb_info *info,
 				struct list_head *pagelist)
 {
+	
+	/*
+	NOTE: This function is being called twice on xserver start
+	1st call - Entire frame changes & whole data is being sent.
+	2nd call - Not all frame bytes are sent during the 2nd call.
+	*/
 	struct page *cur;
 	struct fb_deferred_io *fbdefio = info->fbdefio;
 	struct dlfb_data *dev = info->par;
