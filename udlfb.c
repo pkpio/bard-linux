@@ -905,12 +905,6 @@ static void dlfb_ops_fillrect(struct fb_info *info,
  *   grab the same mutex.
  */
  
-/*
- * NOTE: This function is being called twice on xserver start
- * 	1st call - Entire frame changes & whole data is being sent.
- * 	2nd call - Not all frame bytes are sent during the 2nd call.
- */
- 
  /* -TODO- ADD PRINTKs here */
 static void dlfb_dpy_deferred_io(struct fb_info *info,
 				struct list_head *pagelist)
