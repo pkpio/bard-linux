@@ -54,10 +54,12 @@ ln:
   Length or number of times the pixel value is repeated for. 
   Min: 3, Max: 255
 
-Note for Min. of ln is 3:
-  For values less than 3, the length of the output data, if encoded, would be 
-  greater than the length of the input data. So, we shall instead simply send 
-  the data as is for ln < 3.
+Note:
+  1. Min. of ln is 3: For values less than 3, the length of the output data, if 
+     encoded, would be greater than the length of the input data. So, we shall 
+     instead simply send the data as is for ln < 3
+  2. We are using only 1-byte to encode length even though our basic block is
+     2-bytes. Because 2-bytes can accomodate a value of 65535 which is unusual.
 
 
 
