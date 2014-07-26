@@ -1,0 +1,67 @@
+==================================================================
+Author   :  Praveen Kumar Pendyala (praveen@praveenkumar.co.in)
+Created  :  26 June 2014
+Modified :  26 June 2014
+==================================================================
+
+
+Description
+-----------------
+The compression used is RLE - Run Length Encoding. This is a very simple and 
+efficient method to compress image data. Before proceeding to the next sections,
+you are advised to first readup about RLE. Wiki has a good example to help you
+understand.
+
+
+Encoding scheme
+-----------------
+We discuss about our RLE scheme here. First we will describe about the length of
+our basic block. We may take the size of our basic block as 1-, 2- or n-bytes.
+
+Note for begginers: The example on Wiki (most often any example) uses 1-byte of
+                    data as their basic block.
+
+The BPP - Bytes Per Pixel of our image data is fixed at 2 so, we shall be using
+2 bytes as the length of our basic block.
+
+A stream of data for 2bpp looks like,
+
+Pixel:
+----------[    p0    ][    p1    ][    p2    ]--------------------------------
+          |          ||          ||          |
+Data:     |          ||          ||          |
+----------[ b0 ][ b1 ][ b2 ][ b3 ][ b4 ][ b5 ]--------------------------------
+
+
+We are not attempting a formal mathematical definition of our scheme but rather
+use a couple of case based examples to depict it.
+
+If we consider a stream of 3 identical pixels, they would be encoded as,
+
+--------[   pixel   ][   pixel   ][   pixel   ]--------------------------------
+
+--------[ spec_char ][ ln ][   pixel   ]
+
+
+pixel:
+  Pixel value that is being repeated
+
+spec_char:
+  Is a special character that tells the decoder that some encoding occured at 
+  this index value.
+
+ln:
+  Length or number of times the pixel value is repeated for. 
+  Min: 3, Max: 255
+
+Note for Min. of ln is 3:
+  For values less than 3, the length of the output data, if encoded, would be 
+  greater than the length of the input data. So, we shall instead simply send 
+  the data as is for ln < 3.
+
+
+
+
+
+
+
