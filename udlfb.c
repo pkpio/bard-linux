@@ -1901,20 +1901,20 @@ static int dlfb_usb_probe(struct usb_interface *interface,
 	struct dlfb_data *dev = 0;
 	int retval = -ENOMEM;
 
-	#ifndef CONFIG_FB_DEFERRED_IO
-	printk("Kernel has no FB_DEFERRED_IO support\n");
+	#ifdef CONFIG_FB_DEFERRED_IO
+	printk("Kernel has FB_DEFERRED_IO support\n");
 	#endif
 	
 	#ifndef CONFIG_FB_SYS_IMAGEBLIT
-	printk("Kernel has no FB_SYS_IMAGEBLIT support\n");
+	printk("Kernel has FB_SYS_IMAGEBLIT support\n");
 	#endif
 
 	#ifndef CONFIG_FB_SYS_FOPS
-	printk("Kernel has no FB_SYS_FOPS support\n");
+	printk("Kernel has FB_SYS_FOPS support\n");
 	#endif
 
 	#ifndef CONFIG_FB_MODE_HELPERS
-	printk("Kernel has no FB_MODE_HELPERS support\n");
+	printk("Kernel has FB_MODE_HELPERS support\n");
 	#endif
 
 	printk("dlfb_usb_probe called\n");
