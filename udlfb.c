@@ -115,22 +115,18 @@ static int pixel_limit; /* Optionally force a pixel resolution limit */
  */
 
 #ifndef CONFIG_FB_DEFERRED_IO
-printk("kernel doesn't support FB_DEFERRED_IO\n");
 #warning CONFIG_FB_DEFERRED_IO kernel support required for fb_defio mmap support
 #endif
 
 #ifndef CONFIG_FB_SYS_IMAGEBLIT
-printk("kernel doesn't support FB_SYS_IMAGEBLIT\n");
 #warning CONFIG_FB_SYS_IMAGEBLIT kernel support required for fb console
 #endif
 
 #ifndef CONFIG_FB_SYS_FOPS
-printk("kernel doesn't support FB_SYS_FOPS\n");
 #warning FB_SYS_FOPS kernel support required for filesystem char dev access
 #endif
 
 #ifndef CONFIG_FB_MODE_HELPERS
-printk("kernel doesn't support FB_MODE_HELPERS\n");
 #warning CONFIG_FB_MODE_HELPERS required. Expect build break
 #endif
 
@@ -1904,6 +1900,22 @@ static int dlfb_usb_probe(struct usb_interface *interface,
 	struct usb_device *usbdev;
 	struct dlfb_data *dev = 0;
 	int retval = -ENOMEM;
+
+	#ifndef CONFIG_FB_DEFERRED_IO
+	printk("Kernel has no FB_DEFERRED_IO support\n");
+	#endif
+	
+	#ifndef CONFIG_FB_SYS_IMAGEBLIT
+	printk("Kernel has no FB_SYS_IMAGEBLIT support\n");
+	#endif
+
+	#ifndef CONFIG_FB_SYS_FOPS
+	printk("Kernel has no FB_SYS_FOPS support\n");
+	#endif
+
+	#ifndef CONFIG_FB_MODE_HELPERS
+	printk("Kernel has no FB_MODE_HELPERS support\n");
+	#endif
 
 	printk("dlfb_usb_probe called\n");
 
