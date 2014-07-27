@@ -102,7 +102,7 @@ MODULE_DEVICE_TABLE(usb, id_table);
 
 /* module options */
 static bool console = 1; /* Allow fbcon to open framebuffer */
-static bool fb_defio = 1;  /* Detect mmap writes using page faults */
+static bool fb_defio = 0;  /* Detect mmap writes using page faults */
 static bool shadow = 1; /* Optionally disable shadow framebuffer */
 static int pixel_limit; /* Optionally force a pixel resolution limit */
 
