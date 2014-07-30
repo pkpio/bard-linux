@@ -3,8 +3,8 @@
 
 typedef unsigned u8;
 
-char *compress(char *str, int length) {
-	int count = 0;
+char *compress(char *str, long length) {
+	long count = 0;
 	
 	char *start1 = str;
 	char *start2 = str+1;
@@ -19,8 +19,6 @@ char *compress(char *str, int length) {
 	char *c_write2 = str+1;
 	
 	u8 run_len = 0;
-	
-	printf("length: %d, count: %d\n", length, count);
 	
 	while (count != length) {
 		count = count + 2;
@@ -91,14 +89,13 @@ char *compress(char *str, int length) {
 		str = str + 2;
 	}
 	*c_write1 = 'e';
-	printf("write1 is: %c", *c_write1);
 	return start1;
 }
 
 
 int main(int argc, char **argv) {
 	char * buffer = 0;
-	int length;
+	long length;
 	FILE * f_in = fopen ("input", "rb");
 	FILE * f_out = fopen("output", "wb");
 
