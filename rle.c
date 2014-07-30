@@ -20,7 +20,6 @@ char *compress(char *str) {
 		c_last1 = c_last1 + 2;
 		c_last2 = c_last2 + 2;
 		++run_len;
-		printf("run_len: %d\n", run_len);
 		
 		// end of run
 		if (!(*c_last2) || run_len == 255 || *c_last1 != *c_first1 
@@ -89,10 +88,24 @@ char *compress(char *str) {
 
 
 int main(int argc, char **argv) {
-	if (argc != 2){
-		printf("returning 1\n");
-		return 1;
+	char * buffer = 0;
+	long length;
+	FILE * f = fopen ("input", "rb");
+
+	if (f)
+	{
+		fseek (f, 0, SEEK_END);
+		length = ftell (f);
+		fseek (f, 0, SEEK_SET);
+		buffer = malloc (length);
+		if (buffer){
+			fread (buffer, 1, length, f);
+		}
+		fclose (f);
 	}
-	printf("%s\n", compress(argv[1]));
+
+	if (buffer)
+		printf("\n%s\n", compress(buffer));
+	
 	return 0;
 }
