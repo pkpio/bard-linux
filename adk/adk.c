@@ -116,9 +116,9 @@ adk_read (struct file *file, char __user *user_buf,
 
 	/* if the read was successful, copy the data to user space */
 	if (!retval) {
-	    if (copy_to_user(user_buf, dev->bulk_in_buffer, count))
-		retval = -EFAULT;
-	    else
+	   // if (copy_to_user(user_buf, dev->bulk_in_buffer, count))
+	//	retval = -EFAULT;
+	  //  else
 		retval = count;
 	}
 	
@@ -154,10 +154,10 @@ adk_write (struct file *file, const char __user *user_buf,
 		goto exit;
 		
 	memset(buffer, 0, count);
-	if(copy_from_user(buffer, user_buf, count)){
-		retval = -EFAULT;
-		goto exit;
-	}
+	//if(copy_from_user(buffer, user_buf, count)){
+	//	retval = -EFAULT;
+	//	goto exit;
+	//}
 		
 	/* do a blocking bulk write to the device */	
 	retval = usb_bulk_msg(dev->udev,
