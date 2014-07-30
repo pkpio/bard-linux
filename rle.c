@@ -84,8 +84,6 @@ char *compress(char *str, long length) {
 			c_first2 = c_last2;
 		}
 		
-		//if(!*(str+1))
-		//	break;
 		str = str + 2;
 	}
 	*c_write1 = 'e';
