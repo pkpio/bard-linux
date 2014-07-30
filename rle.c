@@ -22,24 +22,31 @@ char *compress(char *str) {
 		++run_len;
 		printf("run_len: %d\n", run_len);
 		
-		if (!(*c_last2) || *c_last1 != *c_first1 || *c_last2 != *c_first2) { 
+		if (!(*c_last2) || run_len == 255 || *c_last1 != *c_first1 
+			|| *c_last2 != *c_first2) { 
 			// end of run
 			*c_write1 = *c_first1;
 			*c_write2 = *c_first2;
 			
-			c_write2 = c_write2 + 1;
+			c_write1 = c_write1 + 2;
+			c_write2 = c_write2 + 2;
 			
-			if (run_len > 1)
-				*(c_write2++) = '0' + run_len;
+			if (run_len > 1){
+				*(c_write1++) = '0' + run_len;
+				c_write2 = c_write2 + 1;
+			}
 				
 			// start next run
 			run_len = 0; 
 			c_first1 = c_last1;
 			c_first2 = c_last2;
 		}
+		
+		if(!*(str+1))
+			break;
 		str = str + 2;
 	}
-	*c_write2 = 0;
+	*c_write1 = 0;
 	return start1;
 }
 
