@@ -2,28 +2,45 @@
 #include <stdlib.h>
 
 char *compress(char *str) {
-	char *start = str;
-	char *c_first = str;
-	char *c_last = str;
-	char *c_write = str;
+	char *start1 = str;
+	char *start2 = str+1;
+	
+	char *c_first1 = str;
+	char *c_first2 = str+1;
+	
+	char *c_last1 = str;
+	char *c_last2 = str+1;
+	
+	char *c_write1 = str;
+	char *c_write2 = str+1;
+	
 	int run_len = 0;
 	
 	while (*str) {
-		++c_last;
+		c_last1 = c_last1 + 2;
+		c_last2 = c_last2 + 2;
 		++run_len;
-		if (!(*c_last) || *c_last != *c_first || run_len == 9) { 
+		printf("run_len: %d\n", run_len);
+		
+		if (!(*c_last2) || *c_last1 != *c_first1 || *c_last2 != *c_first2) { 
 			// end of run
-			*(c_write++) = *c_first;
+			*c_write1 = *c_first1;
+			*c_write2 = *c_first2;
+			
+			c_write2 = c_write2 + 1;
+			
 			if (run_len > 1)
-			*(c_write++) = '0' + run_len;
+				*(c_write2++) = '0' + run_len;
+				
 			// start next run
 			run_len = 0; 
-			c_first = c_last;
+			c_first1 = c_last1;
+			c_first2 = c_last2;
 		}
-		++str;
+		str = str + 2;
 	}
-	*c_write = 0;
-	return start;
+	*c_write2 = 0;
+	return start1;
 }
 
 
