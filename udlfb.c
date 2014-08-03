@@ -745,6 +745,13 @@ int dlfb_handle_damage(struct dlfb_data *dev, int x, int y,
 	printk("dlfb_handle_damage called\n");
 	
 	printk("handle damage x: %d, y:%d, width:%d, height:%d\n", x, y, width, height);
+	
+	// -TODO- Remove this BB specific issue code
+	// Exit if width and height are something else.
+	if((width - x) != 1024 || (height - y) != 768){
+		printk("Dimension mismatch. Not sending\n");
+		return 0; 
+	}
 
 	start_cycles = get_cycles();
 
@@ -1319,6 +1326,8 @@ static int dlfb_ops_set_par(struct fb_info *info)
 		dlfb_handle_damage(dev, 0, 0, info->var.xres, info->var.yres,
 				   info->screen_base);
 	}
+	
+	printk("Painting green completed \n");
 
 	return result;
 }
@@ -2035,23 +2044,33 @@ static void dlfb_init_framebuffer_work(struct work_struct *work)
 
 	dlfb_ops_check_var(&info->var, info);
 	dlfb_ops_set_par(info);
+	
+	/* -TODO- No debug messages here after */
 
 	retval = register_framebuffer(info);
+	printk("Registering framebuffer\n");
 	if (retval < 0) {
 		pr_err("register_framebuffer failed %d\n", retval);
 		goto error;
+	} else{
+		printk("Frame buffer registered\n");
 	}
+	printk("Registering framebuffer done\n");
 
 	for (i = 0; i < ARRAY_SIZE(fb_device_attrs); i++) {
 		retval = device_create_file(info->dev, &fb_device_attrs[i]);
 		if (retval) {
 			pr_warn("device_create_file failed %d\n", retval);
+		} else{
+			printk("device_create_file success!\n");
 		}
 	}
 
 	retval = device_create_bin_file(info->dev, &edid_attr);
 	if (retval) {
 		pr_warn("device_create_bin_file failed %d\n", retval);
+	} else{
+		printk("device_create_bin_file success\n");
 	}
 
 	pr_info("DisplayLink USB device /dev/fb%d attached. %dx%d resolution."
