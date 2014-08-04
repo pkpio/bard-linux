@@ -31,7 +31,7 @@ be found at, <br/>
 
 Before setup
 -------------------
-Note: <br/><br/>
+Note: <br/>
 
 1. This is still in the development phase and not much inputs have been put into simplifying 
 the setup process for a new user. So, please be informed that the setup might take sometime 
@@ -85,9 +85,9 @@ Starting remote display
 -----------------------
 
 Note: The value of ```X``` in ```\dev\fbX``` should be replaced with value found
-from step 10 of setup.<br/><br/>
+from step 10 of setup.<br/>
 
-To start xserver on the framebuffer, run, <br/><br/>
+To start xserver on the framebuffer, run, <br/>
 
 On PC :<br/>
 ```FRAMEBUFFER=/dev/fbX xinit -- /usr/bin/X :1 -config /etc/X11/xorg.conf.fb```
