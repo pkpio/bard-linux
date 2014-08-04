@@ -2,13 +2,13 @@ bard-linux
 =========================
 Android remote display for BeagleBoard. This is a proposal 
 for Google Summer of Code 2014 under Beagle.org. The complete proposal can be 
-accessed at,
+accessed at, <br/>
 <http://blog.praveenkumar.co.in/2014/05/gsoc-14-proposal-for-beagleorg/>
 
 
 Weekly reports
 -------------------
-Weekly reports can be found at,
+Weekly reports can be found at, <br/>
 http://blog.praveenkumar.co.in/2014/05/beagle-gsoc-progress-tracking/
 
 
@@ -25,15 +25,17 @@ Android device setup into Accessory Development Kit (ADK). Read about ADK on
 Android developers webpage. 
 
 A bare-bone implementation of the ADK driver, with only usb communication, can 
-be found at <https://github.com/praveendath92/adk-driver> 
+be found at, <br/>
+<https://github.com/praveendath92/adk-driver> 
 
 
-Note before setup
+Before setup
 -------------------
-Note: 
-1. This is still in the development phase and not much inputs have been put
-into simplifying the setup process for a new user. So, please be informed that
-the setup might take sometime depending on your prior expertise.
+Note: <br/><br/>
+
+1. This is still in the development phase and not much inputs have been put into simplifying 
+the setup process for a new user. So, please be informed that the setup might take sometime 
+depending on your prior expertise.
 
 2. There are two drivers currently - adk, udlfb. adk driver is to set your device
 into adk mode. udlfb is the framebuffer + usb driver which requires the attached
@@ -54,9 +56,10 @@ and protocol values. Use the below command to findout,
 
     ```cd adk && make && sudo insmod adk.ko```
 
-4. Install ```bard.apk``` on Android and attach it to PC / Bone. Get setup from,
-<http://files.praveenkumar.co.in/bard.apk> or you may build the latest version from
-source at, <https://github.com/praveendath92/bard-droid>
+4. Install ```bard.apk``` on Android and attach it to PC / Bone. Get setup from, <br/>
+   <http://files.praveenkumar.co.in/bard.apk> <br/>
+or you may build the latest version from source at, <br/>
+<https://github.com/praveendath92/bard-droid>
 
 5. Check that your device entered adk mode on attaching. If not, recheck above steps
 
@@ -82,12 +85,14 @@ Starting remote display
 -----------------------
 
 Note: The value of ```X``` in ```\dev\fbX``` should be replaced with value found
-from step 10 of setup.
+from step 10 of setup.<br/><br/>
 
-On PC, run,
+To start xserver on the framebuffer, run, <br/><br/>
+
+On PC :<br/>
 ```FRAMEBUFFER=/dev/fbX xinit -- /usr/bin/X :1 -config /etc/X11/xorg.conf.fb```
     
-On BeagleBone, run,
+On BeagleBone :<br/>
 ```FRAMEBUFFER=/dev/fb1 startx -- /usr/bin/X :1```
     
  
