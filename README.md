@@ -31,6 +31,10 @@ To start xserver on this frame buffer,
 
     FRAMEBUFFER=/dev/fb1 xinit -- /usr/bin/X :1 -config /etc/X11/xorg.conf.fb
     
+On BeagleBone use,
+
+    FRAMEBUFFER=/dev/fb1 startx -- /usr/bin/X :1
+    
  
 Regarding the raw frame data on device,
 
