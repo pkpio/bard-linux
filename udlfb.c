@@ -767,13 +767,13 @@ int dlfb_handle_damage(struct dlfb_data *dev, int x, int y,
 	if (!atomic_read(&dev->usb_active))
 		return 0;
 
-	/* removing urb stuff */
+	/* removing urb stuff 
 	
 	urb = dlfb_get_urb(dev);
 	if (!urb)
 		return 0;
 	cmd = urb->transfer_buffer;
-	
+	*/
 
 	for (i = y; i < y + height ; i++) {
 		const int line_offset = dev->info->fix.line_length * i;
@@ -787,14 +787,15 @@ int dlfb_handle_damage(struct dlfb_data *dev, int x, int y,
 	}
 
 	/* -TODO- Check for changes needed here for no urbs */
-	if (cmd > (char *) urb->transfer_buffer) {
+	//if (cmd > (char *) urb->transfer_buffer) {
 		/* Send partial buffer remaining before exiting */
-		int len = cmd - (char *) urb->transfer_buffer;
+	/*	int len = cmd - (char *) urb->transfer_buffer;
 		ret = dlfb_submit_urb(dev, urb, len);
 		bytes_sent += len;
 		printk("Bytes sent: %d\n", bytes_sent);
 	} else
 		dlfb_urb_completion(urb);
+	*/
 
 error:
 	atomic_add(bytes_sent, &dev->bytes_sent);
