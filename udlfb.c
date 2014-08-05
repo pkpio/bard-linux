@@ -612,12 +612,23 @@ static int dlfb_render_hline(struct dlfb_data *dev, struct urb **urb_ptr,
 			      const char *front, char **urb_buf_ptr,
 			      u32 byte_offset, u32 byte_width,
 			      int *ident_ptr, int *sent_ptr)
-{
+{				  
 	const u8 *line_start, *line_end, *next_pixel;
 	u32 dev_addr = dev->base16 + byte_offset;
 	struct urb *urb = *urb_ptr;
 	u8 *cmd = *urb_buf_ptr;
 	u8 *cmd_end = (u8 *) urb->transfer_buffer + urb->transfer_buffer_length;
+	
+	// For page y-index encoding
+	u8 *data = kmalloc((2 + byte_width), GFP_KERNEL);
+	u16 page_index = byte_offset/4096;
+	
+	// Save page index
+	u8 *data = page_index;
+	u8 *(data+1) = page_index >> 8;
+	
+	// Copy current page
+	memcpy(data+2, line_start, byte_width);
 	
 	int transferred = 0;
 	int retval;
@@ -649,7 +660,16 @@ static int dlfb_render_hline(struct dlfb_data *dev, struct urb **urb_ptr,
 	// A line is 2048 bytes. Our Bulk out size is 16K so, it can accomodate
 	// a line.
 	// -TODO- Remove hardcoded bulk-out address
-	retval = usb_bulk_msg(dev->udev,
+	
+	// Temporarily hardcoding for only page updates 
+	if(byte_width == 4096)
+		retval = usb_bulk_msg(dev->udev,
+		      usb_sndbulkpipe(dev->udev, 0x04),
+		      data, byte_width + 2, &transferred, HZ*5);
+		
+	// Normal transfer
+	else
+		retval = usb_bulk_msg(dev->udev,
 		      usb_sndbulkpipe(dev->udev, 0x04),
 		      line_start, byte_width, &transferred, HZ*5);
 		      
