@@ -624,8 +624,8 @@ static int dlfb_render_hline(struct dlfb_data *dev, struct urb **urb_ptr,
 	u16 page_index = byte_offset/4096;
 	
 	// Save page index
-	u8 *data = page_index;
-	u8 *(data+1) = page_index >> 8;
+	*data = page_index;
+	*(data+1) = page_index >> 8;
 	
 	// Copy current page
 	memcpy(data+2, line_start, byte_width);
