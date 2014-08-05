@@ -1919,15 +1919,15 @@ static int dlfb_usb_probe(struct usb_interface *interface,
 	printk("Kernel has FB_DEFERRED_IO support\n");
 	#endif
 	
-	#ifndef CONFIG_FB_SYS_IMAGEBLIT
+	#ifdef CONFIG_FB_SYS_IMAGEBLIT
 	printk("Kernel has FB_SYS_IMAGEBLIT support\n");
 	#endif
 
-	#ifndef CONFIG_FB_SYS_FOPS
+	#ifdef CONFIG_FB_SYS_FOPS
 	printk("Kernel has FB_SYS_FOPS support\n");
 	#endif
 
-	#ifndef CONFIG_FB_MODE_HELPERS
+	#ifdef CONFIG_FB_MODE_HELPERS
 	printk("Kernel has FB_MODE_HELPERS support\n");
 	#endif
 
