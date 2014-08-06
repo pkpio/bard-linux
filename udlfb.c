@@ -620,12 +620,16 @@ static int dlfb_render_hline(struct dlfb_data *dev, struct urb **urb_ptr,
 	u8 *cmd_end = (u8 *) urb->transfer_buffer + urb->transfer_buffer_length;
 	
 	// For page y-index encoding
-	//u8 *data = kmalloc((2 + byte_width), GFP_KERNEL);
+	u8 *data;
 	u16 page_index = byte_offset/4096;
 	
+	data = kmalloc((2 + byte_width), GFP_KERNEL);
+	if(data){
 	// Save page index
-	//*data = page_index;
-	//*(data+1) = page_index >> 8;
+		*data = page_index;
+		*(data+1) = page_index >> 8;
+		printk("Data len values: %d %d\n", *data, *(data+1));
+	}
 	
 	// Copy current page
 	//memcpy(data+2, line_start, byte_width);
@@ -677,6 +681,9 @@ static int dlfb_render_hline(struct dlfb_data *dev, struct urb **urb_ptr,
 	printk("hline retval:%d\n", retval);
 	printk("hline transferred:%d\n", transferred);
 	printk("hline vertical count:%d\n", vline_count);
+	
+	if(data)
+		kfree(data);
 	
 	
 	/*
