@@ -2304,7 +2304,7 @@ static int dlfb_alloc_urb_list(struct dlfb_data *dev, int count, size_t size)
 		// -TODO- Remove hardcoded bulkout address
 		/* urb->transfer_buffer_length set to actual before submit */
 		/*  */
-		usb_fill_bulk_urb(urb, dev->udev, usb_sndbulkpipe(dev->udev, 0x01),
+		usb_fill_bulk_urb(urb, dev->udev, usb_sndbulkpipe(dev->udev, 0x04),
 			buf, size, dlfb_urb_completion, unode);
 		urb->transfer_flags |= URB_NO_TRANSFER_DMA_MAP;
 
