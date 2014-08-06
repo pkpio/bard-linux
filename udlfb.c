@@ -640,14 +640,9 @@ static int dlfb_render_hline(struct dlfb_data *dev, struct urb **urb_ptr,
 	vline_count++;
 	
 	// Debugging
-	printk("render_hline dev: %02x\n", &dev);
-	printk("render_hline urb_ptr: %02x\n", &urb_ptr);
-	printk("render_hline front: %02x\n", &front);
-	printk("render_hline urb_buf_ptr: %02x\n", &urb_buf_ptr);
+	printk("render_hline page_index: %d\n", page_index);
 	printk("render_hline byte_offset: %d\n", byte_offset);
 	printk("render_hline byte_width: %d\n", byte_width);
-	printk("render_hline ident_ptr: %02x\n", &ident_ptr);
-	printk("render_hline sent_ptr: %02x\n", &sent_ptr);
 	
 	printk("dlfb_render_hline called\n");
 
@@ -662,10 +657,12 @@ static int dlfb_render_hline(struct dlfb_data *dev, struct urb **urb_ptr,
 	// -TODO- Remove hardcoded bulk-out address
 	
 	// Temporarily hardcoding for only page updates 
-	if(byte_width == 4096)
+	if(byte_width == 4096){
+		printk("Using special send command \n");
 		retval = usb_bulk_msg(dev->udev,
 		      usb_sndbulkpipe(dev->udev, 0x04),
 		      data, byte_width + 2, &transferred, HZ*5);
+	}
 		
 	// Normal transfer
 	else
