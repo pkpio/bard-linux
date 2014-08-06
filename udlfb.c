@@ -623,9 +623,9 @@ static int dlfb_render_hline(struct dlfb_data *dev, struct urb **urb_ptr,
 {				  
 	const u8 *line_start, *line_end, *next_pixel;
 	u32 dev_addr = dev->base16 + byte_offset;
-	struct urb *urb = *urb_ptr;
-	u8 *cmd = *urb_buf_ptr;
-	u8 *cmd_end = (u8 *) urb->transfer_buffer + urb->transfer_buffer_length;
+	//struct urb *urb = *urb_ptr;
+	//u8 *cmd = *urb_buf_ptr;
+	//u8 *cmd_end = (u8 *) urb->transfer_buffer + urb->transfer_buffer_length;
 	
 	// For page y-index encoding
 	u8 *data;
@@ -982,11 +982,11 @@ static void dlfb_dpy_deferred_io(struct fb_info *info,
 
 	start_cycles = get_cycles();
 
-	urb = dlfb_get_urb(dev);
-	if (!urb)
-		return;
+	//urb = dlfb_get_urb(dev);
+	//if (!urb)
+	//	return;
 
-	cmd = urb->transfer_buffer;
+	//cmd = urb->transfer_buffer;
 
 	/* walk the written page list and render each to device */
 	list_for_each_entry(cur, &fbdefio->pagelist, lru) {
@@ -998,13 +998,13 @@ static void dlfb_dpy_deferred_io(struct fb_info *info,
 		bytes_rendered += PAGE_SIZE;
 	}
 
-	if (cmd > (char *) urb->transfer_buffer) {
+	//if (cmd > (char *) urb->transfer_buffer) {
 		/* Send partial buffer remaining before exiting */
-		int len = cmd - (char *) urb->transfer_buffer;
-		dlfb_submit_urb(dev, urb, len);
-		bytes_sent += len;
-	} else
-		dlfb_urb_completion(urb);
+	//	int len = cmd - (char *) urb->transfer_buffer;
+	//	dlfb_submit_urb(dev, urb, len);
+	//	bytes_sent += len;
+	//} else
+	//	dlfb_urb_completion(urb);
 
 error:
 	atomic_add(bytes_sent, &dev->bytes_sent);
