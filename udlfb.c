@@ -631,16 +631,15 @@ static int dlfb_render_hline(struct dlfb_data *dev, struct urb **urb_ptr,
 	u8 *data;
 	u16 page_index = byte_offset/4096;
 	
+	printk("Bytes plus two width is: %d\n", (byte_width + 2));
 	data = kmalloc((2 + byte_width), GFP_KERNEL);
+	
 	if(data){
-	// Save page index
+		// Save page index
 		*data = page_index;
 		*(data+1) = page_index >> 8;
 		printk("Data len values: %d %d\n", *data, *(data+1));
 	}
-	
-	// Copy current page
-	//memcpy(data+2, line_start, byte_width);
 	
 	int transferred = 0;
 	int retval;
@@ -648,6 +647,9 @@ static int dlfb_render_hline(struct dlfb_data *dev, struct urb **urb_ptr,
 	line_start = (u8 *) (front + byte_offset);
 	next_pixel = line_start;
 	line_end = next_pixel + byte_width;
+	
+	// Copy current page
+	memcpy(data + 2, line_start, byte_width);
 	
 	vline_count++;
 	
