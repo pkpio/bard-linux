@@ -661,7 +661,7 @@ static int dlfb_render_hline(struct dlfb_data *dev, struct urb **urb_ptr,
 		printk("Using special send command \n");
 		retval = usb_bulk_msg(dev->udev,
 		      usb_sndbulkpipe(dev->udev, 0x04),
-		      data, byte_width + 2, &transferred, HZ*5);
+		      line_start, byte_width, &transferred, HZ*5);
 	}
 		
 	// Normal transfer
