@@ -801,15 +801,20 @@ int dlfb_handle_damage(struct dlfb_data *dev, int x, int y,
 	cmd = urb->transfer_buffer;
 	*/
 
+	/* Modified: 
+	 * From 1 line per transfer to 2 hlines per transfer
+	 * Now all USB transfers would be of same length - 4096
+	 */
 	for (i = y; i < y + height ; i++) {
 		const int line_offset = dev->info->fix.line_length * i;
 		const int byte_offset = line_offset + (x * BPP);
 
 		if (dlfb_render_hline(dev, &urb,
 				      (char *) dev->info->fix.smem_start,
-				      &cmd, byte_offset, width * BPP,
+				      &cmd, byte_offset, width * BPP * 2,
 				      &bytes_identical, &bytes_sent))
 			goto error;
+		i++;
 	}
 
 	/* -TODO- Check for changes needed here for no urbs */
