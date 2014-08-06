@@ -684,7 +684,7 @@ static int dlfb_render_hline(struct dlfb_data *dev, struct urb **urb_ptr,
 	*/
 	retval = usb_bulk_msg(dev->udev,
 	      usb_sndbulkpipe(dev->udev, 0x04),
-	      line_start, byte_width, &transferred, HZ*5);
+	      data, byte_width + 2, &transferred, HZ*5);
 		      
 	sent_ptr = transferred;
 		      
@@ -2150,7 +2150,11 @@ static void dlfb_usb_disconnect(struct usb_interface *interface)
 	atomic_set(&dev->usb_active, 0);
 
 	/* this function will wait for all in-flight urbs to complete */
-	dlfb_free_urb_list(dev);
+	/* -TODO- Free these urbs.
+	 * temporarily removed to see if this fixes the disconnect freeze issue
+	 */
+	
+	//dlfb_free_urb_list(dev);
 
 	if (info) {
 
@@ -2204,7 +2208,8 @@ static void __exit dlfb_module_exit(void)
 
 	printk("dlfb_module_exit called\n");
 	
-	usb_deregister(&dlfb_driver);
+	if(&dlfb_driver)
+		usb_deregister(&dlfb_driver);
 }
 
 module_init(dlfb_module_init);
