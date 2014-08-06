@@ -389,6 +389,14 @@ static int dlfb_set_video_mode(struct dlfb_data *dev,
 
 	writesize = wrptr - buf;
 
+	
+	printk("Writesize in video mode set: %d\n", writesize);
+	/* 
+	 * This accounts for 72 Bytes
+	 * Removing all usb transfers besides the frame data.
+	 * Transfer removal is handled in the submit_urb function
+	 * -TODO- Ensure the driver without such restriction
+	 */
 	retval = dlfb_submit_urb(dev, urb, writesize);
 
 	dev->blank_mode = FB_BLANK_UNBLANK;
@@ -2380,12 +2388,25 @@ static int dlfb_submit_urb(struct dlfb_data *dev, struct urb *urb, size_t len)
 	BUG_ON(len > dev->urbs.size);
 
 	urb->transfer_buffer_length = len; /* set to actual payload len */
+	
+	/*
+	 * Any urb submits are ignored and returned a success code.
+	 * Right now, the build doesn't repond well when there are data
+	 * transfers over usb, besides the frame data. 
+	 * -TODO-
+	 * See how to handle this limitation and also, what more can be
+	 * done with informations send in the urb transfers.
+	 *
+	/*
 	ret = usb_submit_urb(urb, GFP_KERNEL);
 	if (ret) {
 		dlfb_urb_completion(urb); /* because no one else will */
-		atomic_set(&dev->lost_pixels, 1);
+	/*	atomic_set(&dev->lost_pixels, 1);
 		pr_err("usb_submit_urb error %x\n", ret);
 	}
+	*/
+	ret = 0;
+	
 	return ret;
 }
 
