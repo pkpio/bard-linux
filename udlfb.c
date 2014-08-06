@@ -620,15 +620,15 @@ static int dlfb_render_hline(struct dlfb_data *dev, struct urb **urb_ptr,
 	u8 *cmd_end = (u8 *) urb->transfer_buffer + urb->transfer_buffer_length;
 	
 	// For page y-index encoding
-	u8 *data = kmalloc((2 + byte_width), GFP_KERNEL);
+	//u8 *data = kmalloc((2 + byte_width), GFP_KERNEL);
 	u16 page_index = byte_offset/4096;
 	
 	// Save page index
-	*data = page_index;
-	*(data+1) = page_index >> 8;
+	//*data = page_index;
+	//*(data+1) = page_index >> 8;
 	
 	// Copy current page
-	memcpy(data+2, line_start, byte_width);
+	//memcpy(data+2, line_start, byte_width);
 	
 	int transferred = 0;
 	int retval;
@@ -657,6 +657,7 @@ static int dlfb_render_hline(struct dlfb_data *dev, struct urb **urb_ptr,
 	// -TODO- Remove hardcoded bulk-out address
 	
 	// Temporarily hardcoding for only page updates 
+	/*
 	if(byte_width == 4096){
 		printk("Using special send command \n");
 		retval = usb_bulk_msg(dev->udev,
@@ -666,9 +667,10 @@ static int dlfb_render_hline(struct dlfb_data *dev, struct urb **urb_ptr,
 		
 	// Normal transfer
 	else
-		retval = usb_bulk_msg(dev->udev,
-		      usb_sndbulkpipe(dev->udev, 0x04),
-		      line_start, byte_width, &transferred, HZ*5);
+	*/
+	retval = usb_bulk_msg(dev->udev,
+	      usb_sndbulkpipe(dev->udev, 0x04),
+	      line_start, byte_width, &transferred, HZ*5);
 		      
 	sent_ptr = transferred;
 		      
