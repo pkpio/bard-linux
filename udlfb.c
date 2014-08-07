@@ -439,56 +439,6 @@ static int dlfb_ops_mmap(struct fb_info *info, struct vm_area_struct *vma)
 }
 
 /*
- * Trims identical data from front and back of line
- * Sets new front buffer address and width
- * And returns byte count of identical pixels
- * Assumes CPU natural alignment (unsigned long)
- * for back and front buffer ptrs and width
- */
-static int dlfb_trim_hline(const u8 *bback, const u8 **bfront, int *width_bytes)
-{
-	int j, k;
-	const unsigned long *back = (const unsigned long *) bback;
-	const unsigned long *front = (const unsigned long *) *bfront;
-	const int width = *width_bytes / sizeof(unsigned long);
-	int identical = width;
-	int start = width;
-	int end = width;
-
-	printk("dlfb_trim_hline called\n");
-
-	prefetch((void *) front);
-	prefetch((void *) back);
-
-	
-	// Edited
-	start = 0;
-	end = width;	
-	/*	
-	for (j = 0; j < width; j++) {
-		if (back[j] != front[j]) {
-			start = j;
-			break;
-		}
-	}
-
-	for (k = width - 1; k > j; k--) {
-		if (back[k] != front[k]) {
-			end = k+1;
-			break;
-		}
-	}
-	*/
-
-
-	identical = start + (width - end);
-	*bfront = (u8 *) &front[start];
-	*width_bytes = (end - start) * sizeof(unsigned long);
-
-	return identical * sizeof(unsigned long);
-}
-
-/*
  * There are 3 copies of every pixel: The front buffer that the fbdev
  * client renders to, the actual framebuffer across the USB bus in hardware
  * (that we can only write to, slowly, and can never read), and (optionally)
