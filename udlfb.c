@@ -2072,19 +2072,10 @@ static int dlfb_submit_urb(struct dlfb_data *dev, struct urb *urb, size_t len)
 	/*
 	 * Any urb submits are ignored and returned a success code.
 	 * Right now, the build doesn't repond well when there are data
-	 * transfers over usb, besides the frame data. 
-	 * -TODO-
-	 * See how to handle this limitation and also, what more can be
-	 * done with informations send in the urb transfers.
-	 *
-	/*
-	ret = usb_submit_urb(urb, GFP_KERNEL);
-	if (ret) {
-		dlfb_urb_completion(urb); /* because no one else will */
-	/*	atomic_set(&dev->lost_pixels, 1);
-		pr_err("usb_submit_urb error %x\n", ret);
-	}
-	*/
+	 * transfers over usb, besides the frame data. Check git commits to
+	 * to see what was deleted.
+	 */
+	
 	ret = 0;
 	
 	return ret;
