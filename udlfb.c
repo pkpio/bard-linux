@@ -501,9 +501,6 @@ static int dlfb_render_hline(struct dlfb_data *dev, struct urb **urb_ptr,
 {				  
 	const u8 *line_start, *line_end, *next_pixel;
 	u32 dev_addr = dev->base16 + byte_offset;
-	//struct urb *urb = *urb_ptr;
-	//u8 *cmd = *urb_buf_ptr;
-	//u8 *cmd_end = (u8 *) urb->transfer_buffer + urb->transfer_buffer_length;
 	
 	// For page y-index encoding
 	u8 *data;
@@ -544,22 +541,12 @@ static int dlfb_render_hline(struct dlfb_data *dev, struct urb **urb_ptr,
 	// identical pixels value to zero.
 	ident_ptr += 0;
 	
-	// A line is 2048 bytes. Our Bulk out size is 16K so, it can accomodate
-	// a line.
-	// -TODO- Remove hardcoded bulk-out address
-	
-	// Temporarily hardcoding for only page updates 
-	/*
-	if(byte_width == 4096){
-		printk("Using special send command \n");
-		retval = usb_bulk_msg(dev->udev,
-		      usb_sndbulkpipe(dev->udev, 0x04),
-		      line_start, byte_width, &transferred, HZ*5);
-	}
-		
-	// Normal transfer
-	else
-	*/
+	/* A line is 2048 bytes. Our Bulk out size is 16K so, it can accomodate
+	 * a line.
+	 * -TODO- 
+	 * -Remove hardcoded bulk-out address
+	 * -can prefectch_line() be of some perf. boostr here? Check.
+	 */
 	retval = usb_bulk_msg(dev->udev,
 	      usb_sndbulkpipe(dev->udev, 0x04),
 	      data, byte_width + 2, &transferred, HZ*5);
@@ -573,75 +560,6 @@ static int dlfb_render_hline(struct dlfb_data *dev, struct urb **urb_ptr,
 	if(data)
 		kfree(data);
 	
-	
-	/*
-	printk("hline len is: %d\n", line_start - line_start);
-	// Send the current data in dev.
-	while (cmd >= cmd_end) {
-		int len = cmd - (u8 *) urb->transfer_buffer;
-		printk("hline length is: %d\n", len);
-		if (dlfb_submit_urb(dev, urb, len))
-			return 1; /* lost pixels is set */
-	//	*sent_ptr += len;
-	//	urb = dlfb_get_urb(dev);
-	//	if (!urb)
-	//		return 1; /* lost_pixels is set */
-	//	*urb_ptr = urb;
-	//	cmd = urb->transfer_buffer;
-	//	cmd_end = &cmd[urb->transfer_buffer_length];
-	//}
-	
-	
-	// -TODO- Set sent_ptr value too
-	
-	/*
-	if (dev->backing_buffer) {
-		int offset;
-		const u8 *back_start = (u8 *) (dev->backing_buffer
-						+ byte_offset);
-
-		
-		ident_ptr += dlfb_trim_hline(back_start, &next_pixel,
-			&byte_width);
-
-		
-		//prefetch((void *) (const unsigned long *) * (&next_pixel));
-		//prefetch((void *) (const unsigned long *) back_start);
-
-		offset = next_pixel - line_start;
-		line_end = next_pixel + byte_width;
-		dev_addr += offset;
-		back_start += offset;
-		line_start += offset;
-
-		memcpy((char *)back_start, (char *) line_start,
-		       byte_width);
-	}
-
-	while (next_pixel < line_end) {
-
-		
-		dlfb_compress_hline((const uint16_t **) &next_pixel,
-			     (const uint16_t *) line_end, &dev_addr,
-			(u8 **) &cmd, (u8 *) cmd_end);
-
-		if (cmd >= cmd_end) {
-			int len = cmd - (u8 *) urb->transfer_buffer;
-			if (dlfb_submit_urb(dev, urb, len))
-				return 1; /* lost pixels is set */
-	//		*sent_ptr += len;
-	//		urb = dlfb_get_urb(dev);
-	//		if (!urb)
-	//			return 1; /* lost_pixels is set */
-	//		*urb_ptr = urb;
-	//		cmd = urb->transfer_buffer;
-	//		cmd_end = &cmd[urb->transfer_buffer_length];
-	//	}
-	//}
-	
-
-	//*urb_buf_ptr = cmd;
-
 	return 0;
 }
 
@@ -681,14 +599,6 @@ int dlfb_handle_damage(struct dlfb_data *dev, int x, int y,
 	if (!atomic_read(&dev->usb_active))
 		return 0;
 
-	/* removing urb stuff 
-	
-	urb = dlfb_get_urb(dev);
-	if (!urb)
-		return 0;
-	cmd = urb->transfer_buffer;
-	*/
-
 	/* Modified: 
 	 * From 1 line per transfer to 2 hlines per transfer
 	 * Now all USB transfers would be of same length - 4096
@@ -704,17 +614,6 @@ int dlfb_handle_damage(struct dlfb_data *dev, int x, int y,
 			goto error;
 		i++;
 	}
-
-	/* -TODO- Check for changes needed here for no urbs */
-	//if (cmd > (char *) urb->transfer_buffer) {
-		/* Send partial buffer remaining before exiting */
-	/*	int len = cmd - (char *) urb->transfer_buffer;
-		ret = dlfb_submit_urb(dev, urb, len);
-		bytes_sent += len;
-		printk("Bytes sent: %d\n", bytes_sent);
-	} else
-		dlfb_urb_completion(urb);
-	*/
 
 error:
 	atomic_add(bytes_sent, &dev->bytes_sent);
@@ -860,12 +759,6 @@ static void dlfb_dpy_deferred_io(struct fb_info *info,
 
 	start_cycles = get_cycles();
 
-	//urb = dlfb_get_urb(dev);
-	//if (!urb)
-	//	return;
-
-	//cmd = urb->transfer_buffer;
-
 	/* walk the written page list and render each to device */
 	list_for_each_entry(cur, &fbdefio->pagelist, lru) {
 
@@ -875,14 +768,6 @@ static void dlfb_dpy_deferred_io(struct fb_info *info,
 			goto error;
 		bytes_rendered += PAGE_SIZE;
 	}
-
-	//if (cmd > (char *) urb->transfer_buffer) {
-		/* Send partial buffer remaining before exiting */
-	//	int len = cmd - (char *) urb->transfer_buffer;
-	//	dlfb_submit_urb(dev, urb, len);
-	//	bytes_sent += len;
-	//} else
-	//	dlfb_urb_completion(urb);
 
 error:
 	atomic_add(bytes_sent, &dev->bytes_sent);
