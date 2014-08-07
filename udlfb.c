@@ -528,16 +528,6 @@ static int dlfb_render_hline(struct dlfb_data *dev, struct urb **urb_ptr,
 	
 	vline_count++;
 	
-	// Debugging
-	printk("render_hline page_index: %d\n", page_index);
-	printk("render_hline byte_offset: %d\n", byte_offset);
-	printk("render_hline byte_width: %d\n", byte_width);
-	
-	printk("dlfb_render_hline called\n");
-
-	
-	// Some testing to send raw data.
-	
 	// identical pixels value to zero.
 	ident_ptr += 0;
 	
@@ -749,7 +739,7 @@ static void dlfb_dpy_deferred_io(struct fb_info *info,
 	int bytes_identical = 0;
 	int bytes_rendered = 0;
 	
-	printk("dlfb_dpy_deferred_io called\n");
+	printk("A deferred io call occured\n");
 
 	if (!fb_defio)
 		return;
