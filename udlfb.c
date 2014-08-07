@@ -781,36 +781,6 @@ error:
 
 #endif
 
-/*
-static int dlfb_get_edid(struct dlfb_data *dev, char *edid, int len)
-{
-	int i;
-	int ret;
-	char *rbuf;
-
-	rbuf = kmalloc(2, GFP_KERNEL);
-	if (!rbuf)
-		return 0;
-
-	for (i = 0; i < len; i++) {
-		ret = usb_control_msg(dev->udev,
-				    usb_rcvctrlpipe(dev->udev, 0), (0x02),
-				    (0x80 | (0x02 << 5)), i << 8, 0xA1, rbuf, 2,
-				    HZ);
-		if (ret < 1) {
-			pr_err("Read EDID byte %d failed err %x\n", i, ret);
-			i--;
-			break;
-		}
-		edid[i] = rbuf[1];
-	}
-
-	kfree(rbuf);
-
-	return i;
-}
-*/
-
 static int dlfb_ops_ioctl(struct fb_info *info, unsigned int cmd,
 				unsigned long arg)
 {
