@@ -2073,7 +2073,7 @@ static int dlfb_submit_urb(struct dlfb_data *dev, struct urb *urb, size_t len)
 	 * Any urb submits are ignored and returned a success code.
 	 * Right now, the build doesn't repond well when there are data
 	 * transfers over usb, besides the frame data. Check git commits to
-	 * to see what was deleted.
+	 * to see what was deleted. Commit "Cleanup in dlfb_submit_urb"
 	 */
 	
 	ret = 0;
