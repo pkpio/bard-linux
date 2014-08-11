@@ -42,7 +42,7 @@ char *compress(char *str, long length) {
 			 * input length what ever be the case
 			 */
 			if(*c_first1 == 'r' && *c_first2 == 'r'){
-				*c_first1 = 'r'-1;
+				*c_first1 = 'r';
 				*c_first2 = 'r'-1;
 			}
 			
