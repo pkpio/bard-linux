@@ -463,7 +463,7 @@ static char* bdfb_compress_hline_encode(char *str, long length, int *rled_len
 	u8 run_len = 0;
 	*rled_len = 0; // RLE data length
 	
-	while (count != length-1) {
+	while (count != length) {
 		count = count + 2;		
 				
 		c_last1 = c_last1 + 2;
