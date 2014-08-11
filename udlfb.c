@@ -443,7 +443,7 @@ static int dlfb_ops_mmap(struct fb_info *info, struct vm_area_struct *vma)
  * Represent each pixel with u16 instead of 2 chars. Modify the logic in
  * accordingly.
  */
-static char* bdfb_compress_hline(char *str, long length)
+static char* bdfb_compress_hline_encode(char *str, long length, int *rled_len)
 {
 	long count = 0;
 	
