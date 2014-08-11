@@ -443,7 +443,8 @@ static int dlfb_ops_mmap(struct fb_info *info, struct vm_area_struct *vma)
  * Represent each pixel with u16 instead of 2 chars. Modify the logic in
  * accordingly.
  */
-static char* bdfb_compress_hline_encode(char *str, long length, int *rled_len)
+static char* bdfb_compress_hline_encode(char *str, long length, int *rled_len
+					u16 page_index)
 {
 	long count = 0;
 	
@@ -549,7 +550,11 @@ static char* bdfb_compress_hline_encode(char *str, long length, int *rled_len)
 		
 		str = str + 2;
 	}
-	*c_write1 = '\0';
+	
+	// If rled_len is odd, we add one byte of trash data and make it even.
+	if(rled_len%2 != 0)
+		*c_write1 = '0';
+	
 	return start1;
 }
 
