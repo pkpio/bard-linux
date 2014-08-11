@@ -35,6 +35,17 @@ char *compress(char *str, long length) {
 		if (run_len == 255 || *c_last1 != *c_first1 
 			|| *c_last2 != *c_first2) {
 			
+			/*
+			 * ESC char case: When ever ESC char occurs. We will 
+			 * replace it with a value next to it. This is to ensure
+			 * that the length of the encoded data never exceeds the
+			 * input length what ever be the case
+			 */
+			if(*c_first1 == 'r' && *c_first2 == 'r'){
+				*c_first1 = 'r'-1;
+				*c_first2 = 'r'-1;
+			}
+			
 			// No repition. Input as output.
 			if(run_len < 2){
 				*c_write1 = *c_first1;
