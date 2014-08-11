@@ -4,7 +4,7 @@
 typedef unsigned u8;
 typedef unsigned u16;
 
-char *compress(char *str, long length) {
+char *compress(char *str, long length, int *rled_len) {
 	long count = 0;
 	
 	char *start1 = str;
@@ -20,20 +20,20 @@ char *compress(char *str, long length) {
 	char *c_write2 = str+1;
 	
 	u8 run_len = 0;
+	*rled_len = 0; // RLE data length
 	
-	/*
-	 * Does it work with len - 1 for image data too?
-	 */
 	while (count != length-1) {
-		count = count + 2;
-		
+		count = count + 2;		
+				
 		c_last1 = c_last1 + 2;
 		c_last2 = c_last2 + 2;
+		
 		++run_len;
 		
 		// end of run
 		if (run_len == 255 || *c_last1 != *c_first1 
 			|| *c_last2 != *c_first2) {
+			
 			
 			/*
 			 * ESC char case: When ever ESC char occurs. We will 
@@ -42,7 +42,7 @@ char *compress(char *str, long length) {
 			 * input length what ever be the case
 			 */
 			if(*c_first1 == 'r' && *c_first2 == 'r'){
-				*c_first1 = 'r';
+				*c_first1 = 'r'-1;
 				*c_first2 = 'r'-1;
 			}
 			
@@ -50,6 +50,9 @@ char *compress(char *str, long length) {
 			if(run_len < 2){
 				*c_write1 = *c_first1;
 				*c_write2 = *c_first2;
+				
+				// 2 bytes written to output
+				*rled_len = *rled_len + 2;
 			}
 			
 			// repeated twice. Input as output.
@@ -63,7 +66,10 @@ char *compress(char *str, long length) {
 				
 				// Write the input again. No encoding.
 				*c_write1 = *c_first1;
-				*c_write2 = *c_first2;				
+				*c_write2 = *c_first2;
+				
+				// 4 bytes written to output
+				*rled_len = *rled_len + 4;				
 			}
 			
 			// run_len >= 3. We also add a special char.
@@ -85,8 +91,10 @@ char *compress(char *str, long length) {
 				
 				// Now go back and write the special char
 				*(c_write1-3) = 'r';
-				*(c_write2-3) = 'r';			
+				*(c_write2-3) = 'r';
 				
+				// 5 bytes written to output
+				*rled_len = *rled_len + 5;
 			}
 			
 			// set write pointers for next write
@@ -101,7 +109,7 @@ char *compress(char *str, long length) {
 		
 		str = str + 2;
 	}
-	*c_write1 = 'e';
+	*c_write1 = '\0';
 	return start1;
 }
 
@@ -109,6 +117,7 @@ char *compress(char *str, long length) {
 int main(int argc, char **argv) {
 	char * buffer = 0;
 	long length;
+	int rled_len = 0;
 	FILE * f_in = fopen ("input", "rb");
 	FILE * f_out = fopen("output", "wb");
 
@@ -127,12 +136,12 @@ int main(int argc, char **argv) {
 	}
 
 	if (buffer && f_out){
-		buffer = compress(buffer, length);
+		buffer = compress(buffer, length, &rled_len);
 		
-		while(*buffer != 'e'){
-			fwrite(buffer, 1, 1, f_out);
-			buffer = buffer + 1;
-		}
+		printf("Encoded length : %d\n", rled_len);
+	
+		fwrite(buffer, 1, rled_len, f_out);
+		buffer = buffer + 1;
 		fclose(f_out);
 	}
 	
