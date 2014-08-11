@@ -109,7 +109,7 @@ char *compress(char *str, long length, int *rled_len) {
 		
 		str = str + 2;
 	}
-	*c_write1 = '\0';
+	
 	return start1;
 }
 
