@@ -2,6 +2,7 @@
 #include <stdlib.h>
 
 typedef unsigned u8;
+typedef unsigned u16;
 
 char *compress(char *str, long length) {
 	long count = 0;
@@ -20,7 +21,10 @@ char *compress(char *str, long length) {
 	
 	u8 run_len = 0;
 	
-	while (count != length) {
+	/*
+	 * Does it work with len - 1 for image data too?
+	 */
+	while (count != length-1) {
 		count = count + 2;
 		
 		c_last1 = c_last1 + 2;
