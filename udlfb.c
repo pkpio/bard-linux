@@ -460,22 +460,39 @@ static char* bdfb_compress_hline(char *str, long length)
 	char *c_write2 = str+1;
 	
 	u8 run_len = 0;
+	*rled_len = 0; // RLE data length
 	
-	while (count != length) {
-		count = count + 2;
-		
+	while (count != length-1) {
+		count = count + 2;		
+				
 		c_last1 = c_last1 + 2;
 		c_last2 = c_last2 + 2;
+		
 		++run_len;
 		
 		// end of run
 		if (run_len == 255 || *c_last1 != *c_first1 
 			|| *c_last2 != *c_first2) {
 			
+			
+			/*
+			 * ESC char case: When ever ESC char occurs. We will 
+			 * replace it with a value next to it. This is to ensure
+			 * that the length of the encoded data never exceeds the
+			 * input length what ever be the case
+			 */
+			if(*c_first1 == 'r' && *c_first2 == 'r'){
+				*c_first1 = 'r'-1;
+				*c_first2 = 'r'-1;
+			}
+			
 			// No repition. Input as output.
 			if(run_len < 2){
 				*c_write1 = *c_first1;
 				*c_write2 = *c_first2;
+				
+				// 2 bytes written to output
+				*rled_len = *rled_len + 2;
 			}
 			
 			// repeated twice. Input as output.
@@ -489,7 +506,10 @@ static char* bdfb_compress_hline(char *str, long length)
 				
 				// Write the input again. No encoding.
 				*c_write1 = *c_first1;
-				*c_write2 = *c_first2;				
+				*c_write2 = *c_first2;
+				
+				// 4 bytes written to output
+				*rled_len = *rled_len + 4;				
 			}
 			
 			// run_len >= 3. We also add a special char.
@@ -511,8 +531,10 @@ static char* bdfb_compress_hline(char *str, long length)
 				
 				// Now go back and write the special char
 				*(c_write1-3) = 'r';
-				*(c_write2-3) = 'r';			
+				*(c_write2-3) = 'r';
 				
+				// 5 bytes written to output
+				*rled_len = *rled_len + 5;
 			}
 			
 			// set write pointers for next write
@@ -527,7 +549,7 @@ static char* bdfb_compress_hline(char *str, long length)
 		
 		str = str + 2;
 	}
-	*c_write1 = 'e';
+	*c_write1 = '\0';
 	return start1;
 }
 
