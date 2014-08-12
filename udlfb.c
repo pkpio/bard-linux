@@ -443,8 +443,8 @@ static int dlfb_ops_mmap(struct fb_info *info, struct vm_area_struct *vma)
  * Represent each pixel with u16 instead of 2 chars. Modify the logic in
  * accordingly.
  */
-static char* bdfb_compress_hline_encode(char *line, int byte_width, int *rled_len
-					u16 page_index)
+static char* bdfb_compress_hline_encode(char *line, int byte_width, 
+					u16 *rled_len, u16 page_index)
 {
 	long count = 0;
 	
@@ -557,16 +557,16 @@ static char* bdfb_compress_hline_encode(char *line, int byte_width, int *rled_le
 	}
 	
 	// If rled_len is odd, we add one byte of trash data and make it even.
-	if(rled_len%2 != 0){
+	if(*rled_len % 2 != 0){
 		*c_write1 = '0';
-		rled_len++;
+		*rled_len++;
 	}
-	rled_len = rled_len + 4; // Include front 4 bytes
+	*rled_len = *rled_len + 4; // Include front 4 bytes
 	
 	// Save the length at the front of the line
 	
-	*start1 = rled_len;
-	*start2 = rled_len >> 8;
+	*start1 = *rled_len;
+	*start2 = *rled_len >> 8;
 	
 	return start1;
 }
@@ -588,13 +588,13 @@ static int dlfb_render_hline(struct dlfb_data *dev, struct urb **urb_ptr,
 	u16 page_index = byte_offset/4096;
 	int transferred = 0;
 	int retval;
-	int rled_len = 0;
+	u16 rled_len = 0;
 	
 	// 2 bytes for y-index and 2 bytes for data length after compression.
 	data = kmalloc((4 + byte_width), GFP_KERNEL);
 	
 	if(!data){
-		printf("Error allocating memory");
+		printk("Error allocating memory\n");
 		return -ENOMEM;
 	}
 
@@ -605,11 +605,8 @@ static int dlfb_render_hline(struct dlfb_data *dev, struct urb **urb_ptr,
 	// Copy current page leaving 4 bytes at the front.
 	memcpy(data + 4, line_start, byte_width);
 	
-	// Compress and encode
 	data = bdfb_compress_hline_encode(data, byte_width, &rled_len, 
 						page_index);	
-	
-	// identical pixels value to zero.
 	ident_ptr += 0;
 	
 	/* A line is 2048 bytes. Our Bulk out size is 16K so, it can accomodate
