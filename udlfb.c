@@ -443,8 +443,8 @@ static int dlfb_ops_mmap(struct fb_info *info, struct vm_area_struct *vma)
  * Represent each pixel with u16 instead of 2 chars. Modify the logic in
  * accordingly.
  */
-static char* bdfb_compress_hline_encode(char *line, long length, int *rled_len
-					u16 page_index, int byte_width)
+static char* bdfb_compress_hline_encode(char *line, int byte_width, int *rled_len
+					u16 page_index)
 {
 	long count = 0;
 	
@@ -468,7 +468,7 @@ static char* bdfb_compress_hline_encode(char *line, long length, int *rled_len
 	*(start2+2) = page_index >> 8;
 		
 	// Perform RLE encoding
-	while (count != length) {
+	while (count != byte_width) {
 		count = count + 2;		
 				
 		c_last1 = c_last1 + 2;
@@ -561,8 +561,10 @@ static char* bdfb_compress_hline_encode(char *line, long length, int *rled_len
 		*c_write1 = '0';
 		rled_len++;
 	}
+	rled_len = rled_len + 4; // Include front 4 bytes
 	
 	// Save the length at the front of the line
+	
 	*start1 = rled_len;
 	*start2 = rled_len >> 8;
 	
@@ -603,6 +605,9 @@ static int dlfb_render_hline(struct dlfb_data *dev, struct urb **urb_ptr,
 	// Copy current page leaving 4 bytes at the front.
 	memcpy(data + 4, line_start, byte_width);
 	
+	// Compress and encode
+	data = bdfb_compress_hline_encode(data, byte_width, &rled_len, 
+						page_index);	
 	
 	// identical pixels value to zero.
 	ident_ptr += 0;
@@ -615,7 +620,7 @@ static int dlfb_render_hline(struct dlfb_data *dev, struct urb **urb_ptr,
 	 */
 	retval = usb_bulk_msg(dev->udev,
 	      usb_sndbulkpipe(dev->udev, 0x04),
-	      data, byte_width + 2, &transferred, HZ*5);
+	      data, rled_len, &transferred, HZ*5);
 		      
 	sent_ptr = transferred;
 	printk("hline transferred:%d\n", transferred);
