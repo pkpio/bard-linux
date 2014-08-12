@@ -443,25 +443,45 @@ static int dlfb_ops_mmap(struct fb_info *info, struct vm_area_struct *vma)
  * Represent each pixel with u16 instead of 2 chars. Modify the logic in
  * accordingly.
  */
-static char* bdfb_compress_hline_encode(char *str, long length, int *rled_len
-					u16 page_index)
+static char* bdfb_compress_hline_encode(char *line, long length, int *rled_len
+					u16 page_index, int byte_width)
 {
 	long count = 0;
 	
-	char *start1 = str;
-	char *start2 = str+1;
+	char *start1 = line;
+	char *start2 = line+1;
 	
-	char *c_first1 = str;
-	char *c_first2 = str+1;
+	char *c_first1 = line;
+	char *c_first2 = line+1;
 	
-	char *c_last1 = str;
-	char *c_last2 = str+1;
+	char *c_last1 = line;
+	char *c_last2 = line+1;
 	
-	char *c_write1 = str;
-	char *c_write2 = str+1;
+	char *c_write1 = line;
+	char *c_write2 = line+1;
 	
 	u8 run_len = 0;
 	*rled_len = 0; // RLE data length
+	
+	data = kmalloc((2 + byte_width), GFP_KERNEL);
+	
+	if(data){
+		// Save page index
+		*data = page_index;
+		*(data+1) = page_index >> 8;
+		printk("Data len values: %d %d\n", *data, *(data+1));
+	}
+	
+	int transferred = 0;
+	int retval;
+
+	line_start = (u8 *) (front + byte_offset);
+	next_pixel = line_start;
+	line_end = next_pixel + byte_width;
+	
+	// Copy current page
+	memcpy(data + 2, line_start, byte_width);
+	
 	
 	while (count != length) {
 		count = count + 2;		
@@ -548,12 +568,19 @@ static char* bdfb_compress_hline_encode(char *str, long length, int *rled_len
 			c_first2 = c_last2;
 		}
 		
-		str = str + 2;
+		line = line + 2;
 	}
 	
 	// If rled_len is odd, we add one byte of trash data and make it even.
-	if(rled_len%2 != 0)
+	if(rled_len%2 != 0){
 		*c_write1 = '0';
+		rled_len++;
+	}
+	
+	// Set the length of the data
+	// Save page index
+		*data = page_index;
+		*(data+1) = page_index >> 8;
 	
 	return start1;
 }
@@ -571,30 +598,25 @@ static int dlfb_render_hline(struct dlfb_data *dev, struct urb **urb_ptr,
 {				  
 	const u8 *line_start, *line_end, *next_pixel;
 	u32 dev_addr = dev->base16 + byte_offset;
-	
-	// For page y-index encoding
 	u8 *data;
 	u16 page_index = byte_offset/4096;
-	
-	printk("Bytes plus two width is: %d\n", (byte_width + 2));
-	data = kmalloc((2 + byte_width), GFP_KERNEL);
-	
-	if(data){
-		// Save page index
-		*data = page_index;
-		*(data+1) = page_index >> 8;
-		printk("Data len values: %d %d\n", *data, *(data+1));
-	}
-	
 	int transferred = 0;
 	int retval;
+	
+	// 2 bytes for y-index and 2 bytes for data length after compression.
+	data = kmalloc((4 + byte_width), GFP_KERNEL);
+	
+	if(!data){
+		printf("Error allocating memory");
+		return -ENOMEM;
+	}
 
 	line_start = (u8 *) (front + byte_offset);
 	next_pixel = line_start;
 	line_end = next_pixel + byte_width;
 	
-	// Copy current page
-	memcpy(data + 2, line_start, byte_width);
+	// Copy current page leaving 4 bytes at the front.
+	memcpy(data + 4, line_start, byte_width);
 	
 	vline_count++;
 	
