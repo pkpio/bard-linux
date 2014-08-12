@@ -542,6 +542,7 @@ static char* bdfb_compress_hline_encode(char *line, int byte_width,
 				
 				// 5 bytes written to output
 				*rled_len = *rled_len + 5;
+				printk("rled_len is : %d\n", *rled_len);
 			}
 			
 			// set write pointers for next write
@@ -560,9 +561,11 @@ static char* bdfb_compress_hline_encode(char *line, int byte_width,
 	// If rled_len is odd, we add one byte of trash data and make it even.
 	if(*rled_len % 2 != 0){
 		*c_write1 = '0';
-		*rled_len++;
+		*rled_len = *rled_len + 1;
 	}
+	printk("rled_len is : %d\n", *rled_len);
 	*rled_len = *rled_len + 4; // Include front 4 bytes
+	printk("rled_len is : %d\n", *rled_len);
 	
 	// Save the length at the front of the line
 	
