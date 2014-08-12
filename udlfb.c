@@ -451,38 +451,23 @@ static char* bdfb_compress_hline_encode(char *line, long length, int *rled_len
 	char *start1 = line;
 	char *start2 = line+1;
 	
-	char *c_first1 = line;
-	char *c_first2 = line+1;
+	char *c_first1 = line+4;
+	char *c_first2 = line+5;
 	
-	char *c_last1 = line;
-	char *c_last2 = line+1;
+	char *c_last1 = line+4;
+	char *c_last2 = line+5;
 	
-	char *c_write1 = line;
-	char *c_write2 = line+1;
+	char *c_write1 = line+4;
+	char *c_write2 = line+5;
 	
 	u8 run_len = 0;
 	*rled_len = 0; // RLE data length
 	
-	data = kmalloc((2 + byte_width), GFP_KERNEL);
-	
-	if(data){
-		// Save page index
-		*data = page_index;
-		*(data+1) = page_index >> 8;
-		printk("Data len values: %d %d\n", *data, *(data+1));
-	}
-	
-	int transferred = 0;
-	int retval;
-
-	line_start = (u8 *) (front + byte_offset);
-	next_pixel = line_start;
-	line_end = next_pixel + byte_width;
-	
-	// Copy current page
-	memcpy(data + 2, line_start, byte_width);
-	
-	
+	// Save page index
+	*(start1+2) = page_index;
+	*(start2+2) = page_index >> 8;
+		
+	// Perform RLE encoding
 	while (count != length) {
 		count = count + 2;		
 				
@@ -577,10 +562,9 @@ static char* bdfb_compress_hline_encode(char *line, long length, int *rled_len
 		rled_len++;
 	}
 	
-	// Set the length of the data
-	// Save page index
-		*data = page_index;
-		*(data+1) = page_index >> 8;
+	// Save the length at the front of the line
+	*start1 = rled_len;
+	*start2 = rled_len >> 8;
 	
 	return start1;
 }
@@ -602,6 +586,7 @@ static int dlfb_render_hline(struct dlfb_data *dev, struct urb **urb_ptr,
 	u16 page_index = byte_offset/4096;
 	int transferred = 0;
 	int retval;
+	int rled_len = 0;
 	
 	// 2 bytes for y-index and 2 bytes for data length after compression.
 	data = kmalloc((4 + byte_width), GFP_KERNEL);
@@ -618,7 +603,6 @@ static int dlfb_render_hline(struct dlfb_data *dev, struct urb **urb_ptr,
 	// Copy current page leaving 4 bytes at the front.
 	memcpy(data + 4, line_start, byte_width);
 	
-	vline_count++;
 	
 	// identical pixels value to zero.
 	ident_ptr += 0;
@@ -634,6 +618,7 @@ static int dlfb_render_hline(struct dlfb_data *dev, struct urb **urb_ptr,
 	      data, byte_width + 2, &transferred, HZ*5);
 		      
 	sent_ptr = transferred;
+	printk("hline transferred:%d\n", transferred);
 	
 	if(data)
 		kfree(data);
