@@ -466,7 +466,8 @@ static char* bdfb_compress_hline_encode(char *line, int byte_width,
 	// Save page index
 	*(start1+2) = page_index;
 	*(start2+2) = page_index >> 8;
-		
+	
+	printk("byte width is: %d\n", byte_width);	
 	// Perform RLE encoding
 	while (count != byte_width) {
 		count = count + 2;		
@@ -480,7 +481,7 @@ static char* bdfb_compress_hline_encode(char *line, int byte_width,
 		if (run_len == 255 || *c_last1 != *c_first1 
 			|| *c_last2 != *c_first2) {
 			
-			
+			printk("Run length is: %d\n", run_len);
 			/*
 			 * ESC char case: When ever ESC char occurs. We will 
 			 * replace it with a value next to it. This is to ensure
@@ -591,7 +592,7 @@ static int dlfb_render_hline(struct dlfb_data *dev, struct urb **urb_ptr,
 	u16 rled_len = 0;
 	
 	// 2 bytes for y-index and 2 bytes for data length after compression.
-	data = kmalloc((4 + byte_width), GFP_KERNEL);
+	data = kmalloc((byte_width + 4), GFP_KERNEL);
 	
 	if(!data){
 		printk("Error allocating memory\n");
@@ -606,8 +607,9 @@ static int dlfb_render_hline(struct dlfb_data *dev, struct urb **urb_ptr,
 	memcpy(data + 4, line_start, byte_width);
 	
 	data = bdfb_compress_hline_encode(data, byte_width, &rled_len, 
-						page_index);	
+						page_index);
 	ident_ptr += 0;
+	printk("rled_len is: %d\n", rled_len);
 	
 	/* A line is 2048 bytes. Our Bulk out size is 16K so, it can accomodate
 	 * a line.
