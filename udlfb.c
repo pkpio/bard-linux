@@ -634,10 +634,6 @@ static int dlfb_render_hline(struct dlfb_data *dev, struct urb **urb_ptr,
 	      data, byte_width + 2, &transferred, HZ*5);
 		      
 	sent_ptr = transferred;
-		      
-	printk("hline retval:%d\n", retval);
-	printk("hline transferred:%d\n", transferred);
-	printk("hline vertical count:%d\n", vline_count);
 	
 	if(data)
 		kfree(data);
