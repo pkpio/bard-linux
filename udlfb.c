@@ -480,8 +480,6 @@ static char* bdfb_compress_hline_encode(char *line, int byte_width,
 		// end of run
 		if (run_len == 255 || *c_last1 != *c_first1 
 			|| *c_last2 != *c_first2) {
-			
-			printk("Run length is: %d\n", run_len);
 			/*
 			 * ESC char case: When ever ESC char occurs. We will 
 			 * replace it with a value next to it. This is to ensure
