@@ -466,8 +466,7 @@ static char* bdfb_compress_hline_encode(char *line, int byte_width,
 	// Save page index
 	*(start1+2) = page_index;
 	*(start2+2) = page_index >> 8;
-	
-	printk("byte width is: %d\n", byte_width);	
+		
 	// Perform RLE encoding
 	while (count != byte_width) {
 		count = count + 2;		
@@ -540,7 +539,6 @@ static char* bdfb_compress_hline_encode(char *line, int byte_width,
 				
 				// 5 bytes written to output
 				*rled_len = *rled_len + 5;
-				printk("rled_len is : %d\n", *rled_len);
 			}
 			
 			// set write pointers for next write
@@ -556,17 +554,10 @@ static char* bdfb_compress_hline_encode(char *line, int byte_width,
 		line = line + 2;
 	}
 	
-	// If rled_len is odd, we add one byte of trash data and make it even.
-	//if(*rled_len % 2 != 0){
-	//	*c_write1 = '0';
-	//	*rled_len = *rled_len + 1;
-	//}
-	//printk("rled_len is : %d\n", *rled_len);
 	*rled_len = *rled_len + 4; // Include front 4 bytes
 	printk("rled_len is : %d\n", *rled_len);
 	
-	// Save the length at the front of the line
-	
+	// Save the length at the front of the line	
 	*start1 = *rled_len;
 	*start2 = *rled_len >> 8;
 	
