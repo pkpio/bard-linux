@@ -462,7 +462,6 @@ static int dlfb_render_hline(struct dlfb_data *dev, struct urb **urb_ptr,
 		// Save page index
 		*data = page_index;
 		*(data+1) = page_index >> 8;
-		printk("Data len values: %d %d\n", *data, *(data+1));
 	}
 	
 	int transferred = 0;
@@ -492,9 +491,7 @@ static int dlfb_render_hline(struct dlfb_data *dev, struct urb **urb_ptr,
 		      
 	sent_ptr = transferred;
 		      
-	printk("hline retval:%d\n", retval);
-	printk("hline transferred:%d\n", transferred);
-	printk("hline vertical count:%d\n", vline_count);
+	printk("Return: %d transferred: %d \n", retval, transferred);
 	
 	if(data)
 		kfree(data);
