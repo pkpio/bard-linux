@@ -456,7 +456,6 @@ static int dlfb_render_hline(struct dlfb_data *dev, struct urb **urb_ptr,
 	u8 *data;
 	u16 page_index = byte_offset/4096;
 	
-	printk("Bytes plus two width is: %d\n", (byte_width + 2));
 	data = kmalloc((2 + byte_width), GFP_KERNEL);
 	
 	if(data){
@@ -488,7 +487,7 @@ static int dlfb_render_hline(struct dlfb_data *dev, struct urb **urb_ptr,
 	 * -can prefectch_line() be of some perf. boostr here? Check.
 	 */
 	retval = usb_bulk_msg(dev->udev,
-	      usb_sndbulkpipe(dev->udev, 0x04),
+	      usb_sndbulkpipe(dev->udev, 0x07),
 	      data, byte_width + 2, &transferred, HZ*5);
 		      
 	sent_ptr = transferred;
