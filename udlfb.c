@@ -443,60 +443,39 @@ static int dlfb_ops_mmap(struct fb_info *info, struct vm_area_struct *vma)
  * Represent each pixel with u16 instead of 2 chars. Modify the logic in
  * accordingly.
  */
-static char* bdfb_compress_hline_encode(char *line, int byte_width, 
-					u16 *rled_len, u16 page_index)
+static char* bdfb_compress_hline(char *str, long length)
 {
 	long count = 0;
 	
-	char *start1 = line;
-	char *start2 = line+1;
+	char *start1 = str;
+	char *start2 = str+1;
 	
-	char *c_first1 = line+4;
-	char *c_first2 = line+5;
+	char *c_first1 = str;
+	char *c_first2 = str+1;
 	
-	char *c_last1 = line+4;
-	char *c_last2 = line+5;
+	char *c_last1 = str;
+	char *c_last2 = str+1;
 	
-	char *c_write1 = line+4;
-	char *c_write2 = line+5;
+	char *c_write1 = str;
+	char *c_write2 = str+1;
 	
 	u8 run_len = 0;
-	*rled_len = 0; // RLE data length
 	
-	// Save page index
-	*(start1+2) = page_index;
-	*(start2+2) = page_index >> 8;
+	while (count != length) {
+		count = count + 2;
 		
-	// Perform RLE encoding
-	while (count != byte_width) {
-		count = count + 2;		
-				
 		c_last1 = c_last1 + 2;
 		c_last2 = c_last2 + 2;
-		
 		++run_len;
 		
 		// end of run
 		if (run_len == 255 || *c_last1 != *c_first1 
 			|| *c_last2 != *c_first2) {
-			/*
-			 * ESC char case: When ever ESC char occurs. We will 
-			 * replace it with a value next to it. This is to ensure
-			 * that the length of the encoded data never exceeds the
-			 * input length what ever be the case
-			 */
-			if(*c_first1 == 'r' && *c_first2 == 'r'){
-				*c_first1 = 'r'-1;
-				*c_first2 = 'r'-1;
-			}
 			
 			// No repition. Input as output.
 			if(run_len < 2){
 				*c_write1 = *c_first1;
 				*c_write2 = *c_first2;
-				
-				// 2 bytes written to output
-				*rled_len = *rled_len + 2;
 			}
 			
 			// repeated twice. Input as output.
@@ -510,10 +489,7 @@ static char* bdfb_compress_hline_encode(char *line, int byte_width,
 				
 				// Write the input again. No encoding.
 				*c_write1 = *c_first1;
-				*c_write2 = *c_first2;
-				
-				// 4 bytes written to output
-				*rled_len = *rled_len + 4;				
+				*c_write2 = *c_first2;				
 			}
 			
 			// run_len >= 3. We also add a special char.
@@ -535,10 +511,8 @@ static char* bdfb_compress_hline_encode(char *line, int byte_width,
 				
 				// Now go back and write the special char
 				*(c_write1-3) = 'r';
-				*(c_write2-3) = 'r';
+				*(c_write2-3) = 'r';			
 				
-				// 5 bytes written to output
-				*rled_len = *rled_len + 5;
 			}
 			
 			// set write pointers for next write
@@ -551,16 +525,9 @@ static char* bdfb_compress_hline_encode(char *line, int byte_width,
 			c_first2 = c_last2;
 		}
 		
-		line = line + 2;
+		str = str + 2;
 	}
-	
-	*rled_len = *rled_len + 4; // Include front 4 bytes
-	printk("rled_len is : %d\n", *rled_len);
-	
-	// Save the length at the front of the line	
-	*start1 = *rled_len;
-	*start2 = *rled_len >> 8;
-	
+	*c_write1 = 'e';
 	return start1;
 }
 
@@ -577,31 +544,35 @@ static int dlfb_render_hline(struct dlfb_data *dev, struct urb **urb_ptr,
 {				  
 	const u8 *line_start, *line_end, *next_pixel;
 	u32 dev_addr = dev->base16 + byte_offset;
+	
+	// For page y-index encoding
 	u8 *data;
 	u16 page_index = byte_offset/4096;
+	
+	printk("Bytes plus two width is: %d\n", (byte_width + 2));
+	data = kmalloc((2 + byte_width), GFP_KERNEL);
+	
+	if(data){
+		// Save page index
+		*data = page_index;
+		*(data+1) = page_index >> 8;
+		printk("Data len values: %d %d\n", *data, *(data+1));
+	}
+	
 	int transferred = 0;
 	int retval;
-	u16 rled_len = 0;
-	
-	// 2 bytes for y-index and 2 bytes for data length after compression.
-	data = kmalloc((byte_width + 4), GFP_KERNEL);
-	
-	if(!data){
-		printk("Error allocating memory\n");
-		return -ENOMEM;
-	}
 
 	line_start = (u8 *) (front + byte_offset);
 	next_pixel = line_start;
 	line_end = next_pixel + byte_width;
 	
-	// Copy current page leaving 4 bytes at the front.
-	memcpy(data + 4, line_start, byte_width);
+	// Copy current page
+	memcpy(data + 2, line_start, byte_width);
 	
-	data = bdfb_compress_hline_encode(data, byte_width, &rled_len, 
-						page_index);
+	vline_count++;
+	
+	// identical pixels value to zero.
 	ident_ptr += 0;
-	printk("rled_len is: %d\n", rled_len);
 	
 	/* A line is 2048 bytes. Our Bulk out size is 16K so, it can accomodate
 	 * a line.
@@ -611,10 +582,13 @@ static int dlfb_render_hline(struct dlfb_data *dev, struct urb **urb_ptr,
 	 */
 	retval = usb_bulk_msg(dev->udev,
 	      usb_sndbulkpipe(dev->udev, 0x04),
-	      data, rled_len, &transferred, HZ*5);
+	      data, byte_width + 2, &transferred, HZ*5);
 		      
 	sent_ptr = transferred;
+		      
+	printk("hline retval:%d\n", retval);
 	printk("hline transferred:%d\n", transferred);
+	printk("hline vertical count:%d\n", vline_count);
 	
 	if(data)
 		kfree(data);
