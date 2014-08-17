@@ -31,13 +31,7 @@
 #include <linux/delay.h>
 #include <linux/version.h> /* many users build as module against old kernels*/
 #include "udlfb.h"
-
-/* ADK Debugging mode */
-#define VID1	0x18d1	//VID in ADK + ADB mode
-#define PID1	0x2d01	//PID in ADK + ADB mode
-#define CL1	0xff	//Class
-#define SC1	0xff	//Subclass
-#define PR1	0x00	//Protocol
+#include "devices.h"
 
 // A temp var just to see how many times hline_render is being called.
 int vline_count = 0;
@@ -150,9 +144,6 @@ static void err (char *msg){
 static char *dlfb_set_register(char *buf, u8 reg, u8 val)
 {
 	printk("dlfb_set_register called\n");
-	//printk("dlfb_set_register: buf: %c, reg: %u, val: %u\n", buf, reg, val);
-	//*buf++ = 0xAF;
-	//*buf++ = 0x20;
 	*buf++ = reg;
 	*buf++ = val;
 	return buf;
@@ -479,9 +470,7 @@ static int dlfb_render_hline(struct dlfb_data *dev, struct urb **urb_ptr,
 	// identical pixels value to zero.
 	ident_ptr += 0;
 	
-	/* A line is 2048 bytes. Our Bulk out size is 16K so, it can accomodate
-	 * a line.
-	 * -TODO- 
+	/* -TODO- 
 	 * -Remove hardcoded bulk-out address
 	 * -can prefectch_line() be of some perf. boostr here? Check.
 	 */
@@ -514,8 +503,10 @@ int dlfb_handle_damage(struct dlfb_data *dev, int x, int y,
 	
 	printk("handle damage x: %d, y:%d, width:%d, height:%d\n", x, y, width, height);
 	
-	// -TODO- Remove this BB specific issue code
-	// Exit if width and height are something else.
+	/* -TODO- 
+	 * -Remove this BB specific issue code
+	 * Exit if width and height are something else.
+	 */
 	if((width - x) != 1024 || (height - y) != 768){
 		printk("Dim. mismatch. Not sending\n");
 		return 0; 
@@ -671,7 +662,6 @@ static void dlfb_ops_fillrect(struct fb_info *info,
  *   grab the same mutex.
  */
  
- /* -TODO- ADD PRINTKs here */
 static void dlfb_dpy_deferred_io(struct fb_info *info,
 				struct list_head *pagelist)
 {
@@ -1068,8 +1058,6 @@ static char *dlfb_dummy_render(char *buf)
 /*
  * In order to come back from full DPMS off, we need to set the mode again
  */
- 
- /* -TODO- CHECK HERE -TODO- */
 static int dlfb_ops_blank(int blank_mode, struct fb_info *info)
 {
 	struct dlfb_data *dev = info->par;
@@ -1255,8 +1243,6 @@ static int dlfb_setup_modes(struct dlfb_data *dev,
 		
 		if (i >= EDID_LENGTH){
 			fb_edid_to_monspecs(edid, &info->monspecs);
-			pr_warn("teste\t%x\n",edid[8]);
-			pr_warn("teste\t%x\n",sony_sdmhs53_edid[8]);
 		}
 
 		if (info->monspecs.modedb_len > 0) {
