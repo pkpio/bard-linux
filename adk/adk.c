@@ -5,20 +5,15 @@
 #include <linux/errno.h>
 
 #include "adk.h"
+#include "../devices.h"
 
 #define DEBUG_TAG "BARD"
 #define BARD_MINOR_BASE	96 /* Base address for the minor number */
 
-/* Normal Debugging mode */
-#define VID0	0x18d1	//VID in ADK + ADB mode
-#define PID0	0x4ee2	//PID in ADK + ADB mode
-#define CL0	0xff	//Class
-#define SC0	0x42	//Subclass
-#define PR0	0x01	//Protocol
-
 /* table of devices that work with this driver */
 static struct usb_device_id adk_devices [] = {
 	{ USB_DEVICE_AND_INTERFACE_INFO(VID0, PID0, CL0, SC0, PR0) },
+	{ USB_DEVICE_AND_INTERFACE_INFO(VID2, PID2, CL2, SC2, PR2) },
 	{ } /* Terminating entry */
 };
 
