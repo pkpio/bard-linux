@@ -63,6 +63,10 @@ struct dlfb_data {
 	atomic_t bytes_identical; /* saved effort with backbuffer comparison */
 	atomic_t bytes_sent; /* to usb, after compression including overhead */
 	atomic_t cpu_kcycles_used; /* transpired during pixel processing */
+	u8 bulk_in_add;	/* bulk in endpoint address */
+	u8 bulk_out_add; /* bulk in endpoint address */
+	unsigned char *	bulk_in_buffer;	/* the buffer to in data */
+	size_t	bulk_in_size;	/* the size of the in buffer */
 };
 
 #define NR_USB_REQUEST_I2C_SUB_IO 0x02
