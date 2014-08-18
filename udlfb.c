@@ -1604,6 +1604,41 @@ success:
 
 static void dlfb_init_framebuffer_work(struct work_struct *work);
 
+
+static void
+set_bulk_address (
+	struct dlfb_data *dev,
+	struct usb_interface *interface)
+{
+	struct usb_endpoint_descriptor *endpoint;
+	struct usb_host_interface *iface_desc;
+	int i;
+	
+	iface_desc = interface->cur_altsetting;
+	for (i = 0; i < iface_desc->desc.bNumEndpoints; ++i) {
+		endpoint = &iface_desc->endpoint[i].desc;
+		
+		/* check for bulk endpoint */
+		if ((endpoint->bmAttributes & USB_ENDPOINT_XFERTYPE_MASK) 
+			== USB_ENDPOINT_XFER_BULK){
+			
+			/* bulk in */
+			if(endpoint->bEndpointAddress & USB_DIR_IN) {
+				dev->bulk_in_add = endpoint->bEndpointAddress;
+				dev->bulk_in_size = endpoint->wMaxPacketSize;
+				dev->bulk_in_buffer = kmalloc(dev->bulk_in_size,
+							 	GFP_KERNEL);
+				if (!dev->bulk_in_buffer)
+					printk("Could not allocate bulk buffer");
+			}
+			
+			/* bulk out */
+			else
+				dev->bulk_out_add = endpoint->bEndpointAddress;	
+		}
+	}
+}
+
 static int dlfb_usb_probe(struct usb_interface *interface,
 			const struct usb_device_id *id)
 {
