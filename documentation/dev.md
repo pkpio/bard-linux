@@ -58,12 +58,12 @@ only after the device enters Accessory mode (you will see a persistent notificat
 mode (referred ADK mode hence forth), you will be using another small driver in this repo, named [ADK][6]. 
 So, to summarize:
 
-  - Linux: 2 drivers
-    1. ADK driver - To set device into accessory mode
-    2. udlfb - The main driver that transfers UI
-  - Andriod app: well, that's it.
+  1. Linux: 2 drivers
+    - ADK   - To set device into accessory mode
+    - udlfb - The main driver that transfers UI
+  2. Android app: well, that's it.
 
-Feel free to drop an email or come by IRC. 
+Feel free to drop an email or come by IRC. Star this / fork it and I look forward to seeing your contributions.
 
 
 [1]: https://github.com/praveendath92/bard-droid
