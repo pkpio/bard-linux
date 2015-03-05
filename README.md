@@ -1,15 +1,16 @@
 bard-linux
 =========================
 Android remote display for BeagleBoard. This is a proposal 
-for Google Summer of Code 2014 under Beagle.org. The complete proposal can be 
-accessed at, <br/>
-<http://blog.praveenkumar.co.in/2014/05/gsoc-14-proposal-for-beagleorg/>
+for Google Summer of Code 2014 under Beagle.org. Check the [complete proposal][1].
+
+Developers / GSoC aspirants
+-----------------------------
+Please start by [reading this][2]
 
 
 Weekly reports
 -------------------
-Weekly reports can be found at, <br/>
-http://blog.praveenkumar.co.in/2014/05/beagle-gsoc-progress-tracking/
+Weekly reports can be found at [here][3]
 
 
 Framebuffer
@@ -25,8 +26,7 @@ Android device setup into Accessory Development Kit (ADK). Read about ADK on
 Android developers webpage. 
 
 A bare-bone implementation of the ADK driver, with only usb communication, can 
-be found at, <br/>
-<https://github.com/praveendath92/adk-driver> 
+be found [here][4]
 
 
 Before setup
@@ -95,4 +95,7 @@ On PC :<br/>
 On BeagleBone :<br/>
 ```FRAMEBUFFER=/dev/fb1 startx -- /usr/bin/X :1```
     
- 
+[1]: http://blog.praveenkumar.co.in/2014/05/gsoc-14-proposal-for-beagleorg
+[2]: https://github.com/praveendath92/bard-linux/blob/master/documentation/dev.md
+[3]: http://blog.praveenkumar.co.in/2014/05/beagle-gsoc-progress-tracking/
+[4]: https://github.com/praveendath92/adk-driver
