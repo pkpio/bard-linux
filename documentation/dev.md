@@ -8,7 +8,7 @@ Structure
 The whole pacakge comes in 2 parts.
 
   1. [Android application][1]
-  2. Kernel driver
+  2. [Kernel driver][7]
 
 Headsup Droid enthusiasts, major work here is on the kernel driver - you will have just as much fun however! 
 More on fine structural details, later.
@@ -80,3 +80,4 @@ Feel free to drop an email or come by IRC. Star this / fork it and I look forwar
 [4]: http://www.linuxjournal.com/article/7353
 [5]: https://github.com/praveendath92/bard-linux/blob/master/udlfb.c#L491
 [6]: https://github.com/praveendath92/bard-linux/tree/master/adk
+[7]: https://github.com/praveendath92/bard-linux
