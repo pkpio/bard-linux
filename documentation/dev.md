@@ -69,6 +69,8 @@ Setting up
 Please go through setup instructions in [Readme][7]. It is lengthy but we do have plans to make it short.
 
 
+Thank you
+-------------------------
 Feel free to drop an email or come by IRC. Star this / fork it and I look forward to seeing your contributions.
 
 
