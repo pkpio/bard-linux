@@ -34,3 +34,11 @@
 #define SC3	0xff	//Subclass
 #define PR3	0x00	//Protocol
 
+/**
+ * OnePlus One Device ids
+**/
+#define VID4	0x05c6
+#define PID4	0x6764
+#define CL4	0xff
+#define SC4	0xff
+#define PR4	0x00
