@@ -90,6 +90,7 @@ static struct usb_device_id id_table[] = {
 		USB_DEVICE_ID_MATCH_INT_PROTOCOL,
 	},
 	{ USB_DEVICE_AND_INTERFACE_INFO(VID1, PID1, CL1, SC1, PR1) },
+	{ USB_DEVICE_AND_INTERFACE_INFO(VID6, PID6, CL6, SC6, PR6) },
 	{},
 };
 MODULE_DEVICE_TABLE(usb, id_table);

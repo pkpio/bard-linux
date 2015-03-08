@@ -34,9 +34,16 @@
 #define SC3	0xff	//Subclass
 #define PR3	0x00	//Protocol
 
-/* ALLVIEW P5 normal mode */
+/* ALLVIEW P5 ADB mode */
 #define VID5 0x0bb4  // Vendor id in ADB mode
 #define PID5 0x0c03  // Product id in ADB mode
 #define CL5  0xff    // Class
 #define SC5  0x42    // Subclass
 #define PR5  0x01    // Protocol
+
+/* ALLVIEW P5 ADK mode */
+#define VID6 0x18d1  // Vendor id in ADK mode
+#define PID6 0x2d01  // Product id in ADK mode
+#define CL6  0xff    // Class
+#define SC6  0x42    // Subclass
+#define PR6  0x01    // Protocol
