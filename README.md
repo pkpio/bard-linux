@@ -68,7 +68,7 @@ product_id, class, subclass and protocol values. Use the below command to findou
 
     ```lsusb -v```
     
-7. You need to update those values in udlfb-driver.Update L36-L40 in udlfb.c Note
+7. You need to update those values in udlfb-driver. Update them in [line 83][5] of ```udlfb.c``` Note
 that these values should be collected using step 6 when device is in adk mode.
 
 8. Now detach your device and run,
@@ -99,3 +99,4 @@ On BeagleBone :<br/>
 [2]: https://github.com/praveendath92/bard-linux/blob/master/documentation/dev.md
 [3]: http://blog.praveenkumar.co.in/2014/05/beagle-gsoc-progress-tracking/
 [4]: https://github.com/praveendath92/adk-driver
+[5]: https://github.com/praveendath92/bard-linux/blob/master/udlfb.c#L83
