@@ -38,7 +38,7 @@
  * OnePlus One Device ids
 **/
 #define VID4	0x05c6
-#define PID4	0x6764
+#define PID4	0x6765
 #define CL4	0xff
-#define SC4	0xff
-#define PR4	0x00
+#define SC4	0x42
+#define PR4	0x01
