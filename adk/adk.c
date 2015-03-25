@@ -11,8 +11,6 @@
 
 /* table of devices that work with this driver */
 static struct usb_device_id adk_devices [] = {
-	{.idVendor = VENDOR_ID_GOOGLE,
-	 .match_flags = USB_DEVICE_ID_MATCH_VENDOR,},
 	{.idVendor = VENDOR_ID_INTEL,
 	 .match_flags = USB_DEVICE_ID_MATCH_VENDOR,},
 	{.idVendor = VENDOR_ID_HTC,
