@@ -39,7 +39,7 @@ Setup
 2. Install Android app from [Alpha testing][6] or [build from source][7]
 3. Attach your device - app opens popus up showing a green screen
 
-Note: You may check the list of [supported devices here][8]
+Note: You may check the list of [supported OEMs here][8]
 
 
 Starting remote display
