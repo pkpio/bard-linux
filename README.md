@@ -29,63 +29,23 @@ A bare-bone implementation of the ADK driver, with only usb communication, can
 be found [here][4]
 
 
-Before setup
--------------------
-Note: <br/>
-
-1. This is still in the development phase and not much inputs have been put into simplifying 
-the setup process for a new user. So, please be informed that the setup might take sometime 
-depending on your prior expertise.
-
-2. There are two drivers currently - adk, udlfb. adk driver is to set your device
-into adk mode. udlfb is the framebuffer + usb driver which requires the attached
-device to be in adk mode. udlfb is the main driver.
-
-
 Setup
 -------------------
 
-1. You will need to know your Android device's vendor_id, product_id, class, subclass
-and protocol values. Use the below command to findout,
-   
-    ```lsusb -v```
+1. ```make``` and ```insmod``` both drivers udlfb and adk
 
-2. You need to update those values in adk-driver. L13-17 in ```adk/adk.c```
+    ```cd adk && make && sudo insmod adk.ko && cd .. && make && insmod udlfb.ko```
 
-3. Now ```make``` and load the adk driver.
+2. Install Android app from [Alpha testing][6] or [build from source][7]
+3. Attach your device - app opens popus up showing a green screen
 
-    ```cd adk && make && sudo insmod adk.ko```
-
-4. Install ```bard.apk``` on Android and attach it to PC / Bone. Get setup from, <br/>
-   <http://files.praveenkumar.co.in/bard.apk> <br/>
-or you may build the latest version from source at, <br/>
-<https://github.com/praveendath92/bard-droid>
-
-5. Check that your device entered adk mode on attaching. If not, recheck above steps
-
-6. The usb identifiers change in adk mode. So, you need to findout the new vendor_id, 
-product_id, class, subclass and protocol values. Use the below command to findout,
-
-    ```lsusb -v```
-    
-7. You need to update those values in udlfb-driver. Update them in [line 83][5] of ```udlfb.c``` Note
-that these values should be collected using step 6 when device is in adk mode.
-
-8. Now detach your device and run,
-
-    ```cd .. && make && insmod udlfb.ko```
-    
-9. Check kernel log to verify udlfb is probed and a new fb device is registered.
-
-10. Update L4 of ```refs/xorg.conf.fb``` file with the value of new fb device created. 
-Generally ```/dev/fb1``` or ```/dev/fb2``` and copy that file to ```/etc/X11```
+Note: You may check the list of [supported devices here][8]
 
 
 Starting remote display
 -----------------------
 
-Note: The value of ```X``` in ```\dev\fbX``` should be replaced with value found
-from step 10 of setup.<br/>
+Note: The value of ```X``` in ```\dev\fbX``` should be replaced with value new framebuffer device - appears after setup.<br/>
 
 To start xserver on the framebuffer, run, <br/>
 
@@ -100,3 +60,6 @@ On BeagleBone :<br/>
 [3]: http://blog.praveenkumar.co.in/2014/05/beagle-gsoc-progress-tracking/
 [4]: https://github.com/praveendath92/adk-driver
 [5]: https://github.com/praveendath92/bard-linux/blob/master/udlfb.c#L83
+[6]: https://plus.google.com/communities/112465954313348402923
+[7]: https://github.com/praveendath92/bard-droid
+[8]: https://github.com/praveendath92/bard-linux/blob/master/adk/devices.h
