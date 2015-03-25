@@ -31,7 +31,17 @@
 #include <linux/delay.h>
 #include <linux/version.h> /* many users build as module against old kernels*/
 #include "udlfb.h"
-#include "devices.h"
+
+/*
+ * ADK mode device ids are same for devices.
+ * Only difference would be, product ids could be one of the 2 adk mode values.
+ */
+#define ADK_VENDOR		0x18d1
+#define ADK_PRODUCT_ACC		0x2d00
+#define ADK_PRODUCT_ACC_ADB	0x2d01
+#define ADK_INTERFACE_CLASS	0xff
+#define ADK_INTERFACE_SUBCLASS	0xff
+#define ADK_INTERFACE_PROTOCOL	0x00
 
 // A temp var just to see how many times hline_render is being called.
 int vline_count = 0;
@@ -80,16 +90,28 @@ static const u32 udlfb_info_flags = FBINFO_DEFAULT | FBINFO_READS_FAST |
  * but allows DisplayLink to increment those for any future incompatible chips
  */
 static struct usb_device_id id_table[] = {
-	{.idVendor = 0x17e9,
-	 .bInterfaceClass = 0xff,
-	 .bInterfaceSubClass = 0x00,
-	 .bInterfaceProtocol = 0x00,
+	{.idVendor = ADK_VENDOR,
+	 .idProduct = ADK_PRODUCT_ACC,
+	 .bInterfaceClass = ADK_INTERFACE_CLASS,
+	 .bInterfaceSubClass = ADK_INTERFACE_SUBCLASS,
+	 .bInterfaceProtocol = ADK_INTERFACE_PROTOCOL,
 	 .match_flags = USB_DEVICE_ID_MATCH_VENDOR |
+	 	USB_DEVICE_ID_MATCH_PRODUCT |
 		USB_DEVICE_ID_MATCH_INT_CLASS |
 		USB_DEVICE_ID_MATCH_INT_SUBCLASS |
 		USB_DEVICE_ID_MATCH_INT_PROTOCOL,
 	},
-	{ USB_DEVICE_AND_INTERFACE_INFO(VID1, PID1, CL1, SC1, PR1) },
+	{.idVendor = ADK_VENDOR,
+	 .idProduct = ADK_PRODUCT_ACC_ADB,
+	 .bInterfaceClass = ADK_INTERFACE_CLASS,
+	 .bInterfaceSubClass = ADK_INTERFACE_SUBCLASS,
+	 .bInterfaceProtocol = ADK_INTERFACE_PROTOCOL,
+	 .match_flags = USB_DEVICE_ID_MATCH_VENDOR |
+	 	USB_DEVICE_ID_MATCH_PRODUCT |
+		USB_DEVICE_ID_MATCH_INT_CLASS |
+		USB_DEVICE_ID_MATCH_INT_SUBCLASS |
+		USB_DEVICE_ID_MATCH_INT_PROTOCOL,
+	},
 	{},
 };
 MODULE_DEVICE_TABLE(usb, id_table);
